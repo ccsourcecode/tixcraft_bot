@@ -44,7 +44,7 @@ warnings.simplefilter('ignore',InsecureRequestWarning)
 #附註1：沒有寫的很好，很多地方應該可以模組化。
 #附註2：
 
-CONST_APP_VERSION = u"MaxBot (2020.02.17)"
+CONST_APP_VERSION = u"MaxBot (2020.12.08)"
 
 CONST_FROM_TOP_TO_BOTTOM = u"from top to bottom"
 CONST_FROM_BOTTOM_TO_TOP = u"from bottom to top"
@@ -283,7 +283,7 @@ if not config_dict is None:
             if extension_file_exist:
                 chrome_options.add_extension(extension_path)
             else:
-                print("extention not exist")
+                print("extention not exist:", extension_path)
 
             extension_path = Root_Dir + "webdriver/BlockYourselfFromAnalytics.crx"
             extension_file_exist = os.path.isfile(extension_path)
@@ -291,7 +291,7 @@ if not config_dict is None:
             if extension_file_exist:
                 chrome_options.add_extension(extension_path)
             else:
-                print("extention not exist")
+                print("extention not exist:", extension_path)
 
         #caps = DesiredCapabilities().CHROME
         caps = chrome_options.to_capabilities()
@@ -688,27 +688,27 @@ def tixcraft_redirect(url):
     game_name = ""
 
     # get game_name from url
-    if "tixcraft.com/activity/detail/" in url:
+    if "/activity/detail/" in url:
         url_split = url.split("/")
         if len(url_split) >= 6:
             game_name = url_split[5]
 
-    if "tixcraft.com/activity/detail/%s" % (game_name,) in url:
+    if "/activity/detail/%s" % (game_name,) in url:
         # to support teamear
-        entry_url = url.replace("tixcraft.com/activity/detail/","tixcraft.com/activity/game/")
+        entry_url = url.replace("/activity/detail/","/activity/game/")
         #entry_url = "tixcraft.com/activity/game/%s" % (game_name,)
         driver.get(entry_url)
 
 def date_auto_select(url):
     game_name = ""
 
-    if "tixcraft.com/activity/game/" in url:
+    if "/activity/game/" in url:
         url_split = url.split("/")
         if len(url_split) >= 6:
             game_name = url_split[5]
 
     # choose date
-    if "tixcraft.com/activity/game/%s" % (game_name,) in url:
+    if "/activity/game/%s" % (game_name,) in url:
         if len(date_keyword) == 0:
             el = None
 
@@ -856,7 +856,7 @@ def get_tixcraft_target_area(el, area_keyword):
 # PS: auto refresh condition 1: no keyword + no hyperlink.
 # PS: auto refresh condition 2: with keyword + no hyperlink.
 def area_auto_select(url):
-    if 'tixcraft.com/ticket/area/' in url:
+    if '/ticket/area/' in url:
         #driver.switch_to.default_content()
 
         el = None
@@ -1213,6 +1213,46 @@ def tixcraft_ticket_main(url, is_verifyCode_editing):
 
     return is_verifyCode_editing
 
+# PS: There are two "Next" button in kktix.
+#   : 1: /events/xxx
+#   : 2: /events/xxx/registrations/new
+#   : This is for case-1.
+def kktix_events_press_next_button():
+    ret = False
+
+    # let javascript to enable button.
+    time.sleep(0.2)
+
+    try:
+        # method #3 wait
+        wait = WebDriverWait(driver, 1)
+        next_step_button = wait.until(EC.element_to_be_clickable((By.CSS_SELECTOR, 'div.tickets a.btn-point')))
+        if not next_step_button is None:
+            if next_step_button.is_enabled():
+                next_step_button.click()
+                ret = True
+
+    except Exception as exc:
+        print("wait form-actions div wait to be clickable Exception:")
+        print(exc)
+        pass
+
+        # retry once
+        # method #1
+        try:        
+            # method #3 wait
+            wait = WebDriverWait(driver, 1)
+            next_step_button = wait.until(EC.element_to_be_clickable((By.CSS_SELECTOR, 'div.tickets a.btn-point')))
+            if not next_step_button is None:
+                if next_step_button.is_enabled():
+                    next_step_button.click()
+                    ret = True
+        except Exception as exc:
+            print("wait form-actions div retry clickable Exception:")
+            print(exc)
+    return ret
+
+#   : This is for case-2 next button.
 def kktix_press_next_button():
     ret = False
 
@@ -1513,13 +1553,24 @@ def kktix_check_agree_checkbox():
     return is_need_refresh, is_finish_checkbox_click
 
 def kktix_check_register_status(url):
-    prefix = 'com/events/'
+    #ex: https://xxx.kktix.cc/events/xxx
+    prefix_list = ['.com/events/','.cc/events/']
     postfix = '/registrations/new'
-    event_code = find_between(url,prefix,postfix)
-    #print('event_code:',event_code)
+
+    is_match_event_code = False
+    event_code = ""
+    for prefix in prefix_list:
+        event_code = find_between(url,prefix,postfix)
+        if len(event_code) > 0:
+            is_match_event_code = True
+            #print('event_code:',event_code)
+            break
+    
     html_result = None
-    if len(event_code) > 0:
-        url = 'https://kktix.com/g/events/%s/register_info' % event_code
+    if is_match_event_code:
+        url = "https://kktix.com/g/events/%s/register_info" % (event_code)
+        #print('event_code:',event_code)
+        #print("url:", url)
 
         user_agent = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_1) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/78.0.3904.108 Safari/537.36'
         headers = {"Accept-Language": "zh-TW,zh;q=0.5", 'User-Agent': user_agent}
@@ -1534,7 +1585,8 @@ def kktix_check_register_status(url):
     registerStatus = None
     if not html_result is None:
         status_code = html_result.status_code
-
+        #print("status_code:",status_code)
+        
         if status_code == 200:
             html_text = html_result.text
             #print("html_text:", html_text)
@@ -1549,6 +1601,7 @@ def kktix_check_register_status(url):
                 print(exc)
                 pass
 
+    #print("registerStatus:", registerStatus)
     return registerStatus
 
 def kktix_reg_new_main(url, answer_index, registrationsNewApp_div, is_finish_checkbox_click):
@@ -3201,12 +3254,19 @@ def main():
         if '/Downloads/varify.html' in url:
             tixcraft_verify(url)
 
+        tixcraft_family = False
         if 'tixcraft.com' in url:
-            if 'tixcraft.com/ticket/order' in url:
+            tixcraft_family = True
+
+        if 'indievox.com' in url:
+            tixcraft_family = True
+
+        if tixcraft_family:
+            if '/ticket/order' in url:
                 # do nothing.
                 continue
 
-            if 'tixcraft.com/ticket/payment' in url:
+            if '/ticket/payment' in url:
                 # do nothing.
                 continue
 
@@ -3224,7 +3284,7 @@ def main():
                 tixcraft_verify(url)
 
             # main app, to select ticket number.
-            if 'tixcraft.com/ticket/ticket/' in url:
+            if '/ticket/ticket/' in url:
                 is_verifyCode_editing = tixcraft_ticket_main(url, is_verifyCode_editing)
             else:
                 # not is input verify code, reset flag.
@@ -3235,6 +3295,18 @@ def main():
             if '/registrations/new' in url:
                 answer_index, kktix_register_status_last = kktix_reg_new(url, answer_index, kktix_register_status_last)
             else:
+                is_event_page = False
+                if '/events/' in url:
+                    # ex: https://xxx.kktix.cc/events/xxx-copy-1
+                    if len(url.split('/'))<=5:
+                        is_event_page = True
+                if is_event_page:
+                    if auto_press_next_step_button:
+                        # pass switch check.
+                        #print("should press next here.")
+                        kktix_events_press_next_button()
+
+
                 answer_index = -1
                 kktix_register_status_last = None
 
