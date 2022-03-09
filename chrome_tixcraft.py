@@ -1,5 +1,12 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 #encoding=utf-8
+import os
+import sys
+import platform
+import json
+import random
+#print("python version", platform.python_version())
+
 from selenium import webdriver
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import Select
@@ -17,14 +24,11 @@ from selenium.common.exceptions import TimeoutException
 # for ["pageLoadStrategy"] = "eager"
 from selenium.webdriver.common.desired_capabilities import DesiredCapabilities
 
+# for selenium 4
+from selenium.webdriver.chrome.service import Service
+
 # for wait #1
 import time
-
-import os
-import sys
-import platform
-import json
-import random
 
 import re
 from datetime import datetime
@@ -40,11 +44,14 @@ import warnings
 from urllib3.exceptions import InsecureRequestWarning
 warnings.simplefilter('ignore',InsecureRequestWarning)
 
+import ssl
+ssl._create_default_https_context = ssl._create_unverified_context
+
 #執行方式：python chrome_tixcraft.py 或 python3 chrome_tixcraft.py
 #附註1：沒有寫的很好，很多地方應該可以模組化。
 #附註2：
 
-CONST_APP_VERSION = u"MaxBot (2021.03.22)"
+CONST_APP_VERSION = u"MaxBot (2022.02.19)"
 
 CONST_FROM_TOP_TO_BOTTOM = u"from top to bottom"
 CONST_FROM_BOTTOM_TO_TOP = u"from bottom to top"
@@ -53,25 +60,11 @@ CONST_SELECT_ORDER_DEFAULT = CONST_FROM_TOP_TO_BOTTOM
 CONST_SELECT_OPTIONS_DEFAULT = (CONST_FROM_TOP_TO_BOTTOM, CONST_FROM_BOTTOM_TO_TOP, CONST_RANDOM)
 CONST_SELECT_OPTIONS_ARRAY = [CONST_FROM_TOP_TO_BOTTOM, CONST_FROM_BOTTOM_TO_TOP, CONST_RANDOM]
 
-CONT_STRING_1_SEATS_REMAINING = [u'1 seat(s) remaining',u'剩餘 1',u'1 席残り']
+CONT_STRING_1_SEATS_REMAINING = [u'@1 seat(s) remaining',u'剩餘 1@',u'@1 席残り']
 
 # initial webdriver
 # 說明：初始化 webdriver
 driver = None
-
-# 讀取檔案裡的參數值
-basis = ""
-if hasattr(sys, 'frozen'):
-    basis = sys.executable
-else:
-    basis = sys.argv[0]
-app_root = os.path.dirname(basis)
-
-config_filepath = os.path.join(app_root, 'settings.json')
-config_dict = None
-if os.path.isfile(config_filepath):
-    with open(config_filepath) as json_data:
-        config_dict = json.load(json_data)
 
 homepage = None
 browser = None
@@ -103,259 +96,340 @@ kktix_answer_dictionary_list = None
 
 auto_guess_options = False
 
-if not config_dict is None:
-    # read config.
-    if 'homepage' in config_dict:
-        homepage = config_dict["homepage"]
-    if 'browser' in config_dict:
-        browser = config_dict["browser"]
+debugMode = False
 
-    # default ticket number
-    # 說明：自動選擇的票數
-    #ticket_number = "2"
-    ticket_number = ""
-    if 'ticket_number' in config_dict:
-        ticket_number = str(config_dict["ticket_number"])
+def get_app_root():
+    # 讀取檔案裡的參數值
+    basis = ""
+    if hasattr(sys, 'frozen'):
+        basis = sys.executable
+    else:
+        basis = sys.argv[0]
+    app_root = os.path.dirname(basis)
+    return app_root
 
-    facebook_account = ""
-    if 'facebook_account' in config_dict:
-        facebook_account = str(config_dict["facebook_account"])
+def get_config_dict():
+    config_json_filename = 'settings.json'
+    app_root = get_app_root()
+    config_filepath = os.path.join(app_root, config_json_filename)
+    config_dict = None
+    if os.path.isfile(config_filepath):
+        with open(config_filepath) as json_data:
+            config_dict = json.load(json_data)
+    return config_dict
 
-    # for ["kktix"]
-    if 'kktix' in config_dict:
-        auto_press_next_step_button = config_dict["kktix"]["auto_press_next_step_button"]
-        auto_fill_ticket_number = config_dict["kktix"]["auto_fill_ticket_number"]
+def load_config_from_local(driver):
+    config_dict = get_config_dict()
 
-        if 'area_mode' in config_dict["kktix"]:
-            kktix_area_auto_select_mode = config_dict["kktix"]["area_mode"]
-            kktix_area_auto_select_mode = kktix_area_auto_select_mode.strip()
-        if not kktix_area_auto_select_mode in CONST_SELECT_OPTIONS_ARRAY:
-            kktix_area_auto_select_mode = CONST_SELECT_ORDER_DEFAULT
+    global homepage
+    global browser
+    global debugMode
+    global ticket_number
+    global facebook_account
+    global auto_press_next_step_button
+    global auto_fill_ticket_number
+    global kktix_area_auto_select_mode
+    global kktix_area_keyword
 
-        if 'area_keyword' in config_dict["kktix"]:
-            kktix_area_keyword = config_dict["kktix"]["area_keyword"]
-            if kktix_area_keyword is None:
-                kktix_area_keyword = ""
-            kktix_area_keyword = kktix_area_keyword.strip()
-
-        # disable password brute force attack
-        if 'answer_dictionary' in config_dict["kktix"]:
-            kktix_answer_dictionary = config_dict["kktix"]["answer_dictionary"]
-            if kktix_answer_dictionary is None:
-                kktix_answer_dictionary = ""
-            kktix_answer_dictionary = kktix_answer_dictionary.strip()
-
-            if len(kktix_answer_dictionary) > 0:
-                kktix_answer_dictionary_list = kktix_answer_dictionary.split(',')
-
-        if 'auto_guess_options' in config_dict["kktix"]:
-            auto_guess_options = config_dict["kktix"]["auto_guess_options"]
-
-    # for ["tixcraft"]
-    if 'tixcraft' in config_dict:
-        date_auto_select_enable = False
-        date_auto_select_mode = None
-
-        if 'date_auto_select' in config_dict["tixcraft"]:
-            date_auto_select_enable = config_dict["tixcraft"]["date_auto_select"]["enable"]
-            date_auto_select_mode = config_dict["tixcraft"]["date_auto_select"]["mode"]
-
-        if not date_auto_select_mode in CONST_SELECT_OPTIONS_ARRAY:
-            date_auto_select_mode = CONST_SELECT_ORDER_DEFAULT
-
-        if 'date_keyword' in config_dict["tixcraft"]["date_auto_select"]:
-            date_keyword = config_dict["tixcraft"]["date_auto_select"]["date_keyword"]
-            date_keyword = date_keyword.strip()
-
-        area_auto_select_enable = False
-        area_auto_select_mode = None
-
-        if 'area_auto_select' in config_dict["tixcraft"]:
-            area_auto_select_enable = config_dict["tixcraft"]["area_auto_select"]["enable"]
-            area_auto_select_mode = config_dict["tixcraft"]["area_auto_select"]["mode"]
-
-        if not area_auto_select_mode in CONST_SELECT_OPTIONS_ARRAY:
-            area_auto_select_mode = CONST_SELECT_ORDER_DEFAULT
-
-        if 'area_keyword_1' in config_dict["tixcraft"]["area_auto_select"]:
-            area_keyword_1 = config_dict["tixcraft"]["area_auto_select"]["area_keyword_1"]
-            area_keyword_1 = area_keyword_1.strip()
-
-        if 'area_keyword_2' in config_dict["tixcraft"]["area_auto_select"]:
-            area_keyword_2 = config_dict["tixcraft"]["area_auto_select"]["area_keyword_2"]
-            area_keyword_2 = area_keyword_2.strip()
-
-        pass_1_seat_remaining_enable = False
-        if 'pass_1_seat_remaining' in config_dict["tixcraft"]:
-            pass_1_seat_remaining_enable = config_dict["tixcraft"]["pass_1_seat_remaining"]
-
-    # output config:
-    print("version", CONST_APP_VERSION)
-    print("homepage", homepage)
-    print("browser", browser)
-    print("ticket_number", ticket_number)
-    print("facebook_account", facebook_account)
-
-    # for kktix
-    print("==[kktix]==")
-    print("auto_press_next_step_button", auto_press_next_step_button)
-    print("auto_fill_ticket_number", auto_fill_ticket_number)
-    print("kktix_area_keyword", kktix_area_keyword)
-    print("kktix_answer_dictionary", kktix_answer_dictionary)
-    print("auto_guess_options", auto_guess_options)
-
-    # for tixcraft
-    print("==[tixcraft]==")
-    print("date_auto_select_enable", date_auto_select_enable)
-    print("date_auto_select_mode", date_auto_select_mode)
-    print("date_keyword", date_keyword)
+    global kktix_answer_dictionary
+    global kktix_answer_dictionary_list
     
-    print("area_auto_select_enable", area_auto_select_enable)
-    print("area_auto_select_mode", area_auto_select_mode)
-    print("area_keyword_1", area_keyword_1)
-    print("area_keyword_2", area_keyword_2)
+    global auto_guess_options
+    global pass_1_seat_remaining_enable
+    global area_keyword_1
+    global area_keyword_2
 
-    print("pass_1_seat_remaining", pass_1_seat_remaining_enable)
+    global date_auto_select_enable
+    global date_auto_select_mode
 
-    # entry point
-    # 說明：自動開啟第一個的網頁
-    if homepage is None:
-        homepage = ""
-    if len(homepage) == 0:
-        homepage = "https://tixcraft.com/activity/"
+    global date_keyword
 
-    Root_Dir = ""
-    if browser == "chrome":
+    global area_auto_select_enable
+    global area_auto_select_mode
 
-        DEFAULT_ARGS = [
-            '--disable-audio-output',
-            '--disable-background-networking',
-            '--disable-background-timer-throttling',
-            '--disable-breakpad',
-            '--disable-browser-side-navigation',
-            '--disable-checker-imaging', 
-            '--disable-client-side-phishing-detection',
-            '--disable-default-apps',
-            '--disable-demo-mode', 
-            '--disable-dev-shm-usage',
-            #'--disable-extensions',
-            '--disable-features=site-per-process',
-            '--disable-hang-monitor',
-            '--disable-in-process-stack-traces', 
-            '--disable-javascript-harmony-shipping', 
-            '--disable-logging', 
-            '--disable-notifications', 
-            '--disable-popup-blocking',
-            '--disable-prompt-on-repost',
-            '--disable-perfetto',
-            '--disable-permissions-api', 
-            '--disable-plugins',
-            '--disable-presentation-api',
-            '--disable-reading-from-canvas', 
-            '--disable-renderer-accessibility', 
-            '--disable-renderer-backgrounding', 
-            '--disable-shader-name-hashing', 
-            '--disable-smooth-scrolling',
-            '--disable-speech-api',
-            '--disable-speech-synthesis-api',
-            '--disable-sync',
-            '--disable-translate',
+    global debugMode
 
-            '--ignore-certificate-errors',
+    if not config_dict is None:
+        # read config.
+        if 'homepage' in config_dict:
+            homepage = config_dict["homepage"]
+        if 'browser' in config_dict:
+            browser = config_dict["browser"]
+        
+        # output debug message in client side.
+        if 'debug' in config_dict:
+            debugMode = config_dict["debug"]
 
-            '--metrics-recording-only',
-            '--no-first-run',
-            '--no-experiments',
-            '--safebrowsing-disable-auto-update',
-            #'--enable-automation',
-            '--password-store=basic',
-            '--use-mock-keychain',
-            '--lang=zh-TW',
-            '--stable-release-mode',
-            '--use-mobile-user-agent', 
-            '--webview-disable-safebrowsing-support',
-            #'--no-sandbox',
-            #'--incognito',
-        ]
+        # default ticket number
+        # 說明：自動選擇的票數
+        #ticket_number = "2"
+        ticket_number = ""
+        if 'ticket_number' in config_dict:
+            ticket_number = str(config_dict["ticket_number"])
 
-        chrome_options = webdriver.ChromeOptions()
+        facebook_account = ""
+        if 'facebook_account' in config_dict:
+            facebook_account = str(config_dict["facebook_account"])
 
-        # for navigator.webdriver
-        chrome_options.add_experimental_option("excludeSwitches", ['enable-automation'])
-        chrome_options.add_experimental_option('useAutomationExtension', False)
-        chrome_options.add_experimental_option("prefs", {"profile.password_manager_enabled": False, "credentials_enable_service": False,'profile.default_content_setting_values':{'notifications':2}})
+        # for ["kktix"]
+        if 'kktix' in config_dict:
+            auto_press_next_step_button = config_dict["kktix"]["auto_press_next_step_button"]
+            auto_fill_ticket_number = config_dict["kktix"]["auto_fill_ticket_number"]
 
-        if 'kktix.c' in homepage:
-            #chrome_options.add_argument('blink-settings=imagesEnabled=false')
+            if 'area_mode' in config_dict["kktix"]:
+                kktix_area_auto_select_mode = config_dict["kktix"]["area_mode"]
+                kktix_area_auto_select_mode = kktix_area_auto_select_mode.strip()
+            if not kktix_area_auto_select_mode in CONST_SELECT_OPTIONS_ARRAY:
+                kktix_area_auto_select_mode = CONST_SELECT_ORDER_DEFAULT
+
+            if 'area_keyword' in config_dict["kktix"]:
+                kktix_area_keyword = config_dict["kktix"]["area_keyword"]
+                if kktix_area_keyword is None:
+                    kktix_area_keyword = ""
+                kktix_area_keyword = kktix_area_keyword.strip()
+
+            # disable password brute force attack
+            if 'answer_dictionary' in config_dict["kktix"]:
+                kktix_answer_dictionary = config_dict["kktix"]["answer_dictionary"]
+                if kktix_answer_dictionary is None:
+                    kktix_answer_dictionary = ""
+                kktix_answer_dictionary = kktix_answer_dictionary.strip()
+
+                if len(kktix_answer_dictionary) > 0:
+                    kktix_answer_dictionary_list = kktix_answer_dictionary.split(',')
+
+            if 'auto_guess_options' in config_dict["kktix"]:
+                auto_guess_options = config_dict["kktix"]["auto_guess_options"]
+
+        # for ["tixcraft"]
+        if 'tixcraft' in config_dict:
+            date_auto_select_enable = False
+            date_auto_select_mode = None
+
+            if 'date_auto_select' in config_dict["tixcraft"]:
+                date_auto_select_enable = config_dict["tixcraft"]["date_auto_select"]["enable"]
+                date_auto_select_mode = config_dict["tixcraft"]["date_auto_select"]["mode"]
+
+            if not date_auto_select_mode in CONST_SELECT_OPTIONS_ARRAY:
+                date_auto_select_mode = CONST_SELECT_ORDER_DEFAULT
+
+            if 'date_keyword' in config_dict["tixcraft"]["date_auto_select"]:
+                date_keyword = config_dict["tixcraft"]["date_auto_select"]["date_keyword"]
+                date_keyword = date_keyword.strip()
+
+            area_auto_select_enable = False
+            area_auto_select_mode = None
+
+            if 'area_auto_select' in config_dict["tixcraft"]:
+                area_auto_select_enable = config_dict["tixcraft"]["area_auto_select"]["enable"]
+                area_auto_select_mode = config_dict["tixcraft"]["area_auto_select"]["mode"]
+
+            if not area_auto_select_mode in CONST_SELECT_OPTIONS_ARRAY:
+                area_auto_select_mode = CONST_SELECT_ORDER_DEFAULT
+
+            if 'area_keyword_1' in config_dict["tixcraft"]["area_auto_select"]:
+                area_keyword_1 = config_dict["tixcraft"]["area_auto_select"]["area_keyword_1"]
+                area_keyword_1 = area_keyword_1.strip()
+
+            if 'area_keyword_2' in config_dict["tixcraft"]["area_auto_select"]:
+                area_keyword_2 = config_dict["tixcraft"]["area_auto_select"]["area_keyword_2"]
+                area_keyword_2 = area_keyword_2.strip()
+
+            pass_1_seat_remaining_enable = False
+            if 'pass_1_seat_remaining' in config_dict["tixcraft"]:
+                pass_1_seat_remaining_enable = config_dict["tixcraft"]["pass_1_seat_remaining"]
+
+        # output config:
+        print("maxbot app version", CONST_APP_VERSION)
+        print("python version", platform.python_version())
+        print("homepage", homepage)
+        print("browser", browser)
+        print("ticket_number", ticket_number)
+        print("facebook_account", facebook_account)
+
+        # for kktix
+        print("==[kktix]==")
+        print("auto_press_next_step_button", auto_press_next_step_button)
+        print("auto_fill_ticket_number", auto_fill_ticket_number)
+        print("kktix_area_keyword", kktix_area_keyword)
+        print("kktix_answer_dictionary", kktix_answer_dictionary)
+        print("auto_guess_options", auto_guess_options)
+
+        # for tixcraft
+        print("==[tixcraft]==")
+        print("date_auto_select_enable", date_auto_select_enable)
+        print("date_auto_select_mode", date_auto_select_mode)
+        print("date_keyword", date_keyword)
+        
+        print("area_auto_select_enable", area_auto_select_enable)
+        print("area_auto_select_mode", area_auto_select_mode)
+        print("area_keyword_1", area_keyword_1)
+        print("area_keyword_2", area_keyword_2)
+
+        print("pass_1_seat_remaining", pass_1_seat_remaining_enable)
+        print("debug Mode", debugMode)
+
+        # entry point
+        # 說明：自動開啟第一個的網頁
+        if homepage is None:
+            homepage = ""
+        if len(homepage) == 0:
+            homepage = "https://tixcraft.com/activity/"
+
+        Root_Dir = ""
+        if browser == "chrome":
+            # method 5: uc
+            #import undetected_chromedriver as uc
+
+            # method 6: Selenium Stealth
+            from selenium_stealth import stealth
+
+            DEFAULT_ARGS = [
+                '--disable-audio-output',
+                '--disable-background-networking',
+                '--disable-background-timer-throttling',
+                '--disable-breakpad',
+                '--disable-browser-side-navigation',
+                '--disable-checker-imaging', 
+                '--disable-client-side-phishing-detection',
+                '--disable-default-apps',
+                '--disable-demo-mode', 
+                '--disable-dev-shm-usage',
+                #'--disable-extensions',
+                '--disable-features=site-per-process',
+                '--disable-hang-monitor',
+                '--disable-in-process-stack-traces', 
+                '--disable-javascript-harmony-shipping', 
+                '--disable-logging', 
+                '--disable-notifications', 
+                '--disable-popup-blocking',
+                '--disable-prompt-on-repost',
+                '--disable-perfetto',
+                '--disable-permissions-api', 
+                '--disable-plugins',
+                '--disable-presentation-api',
+                '--disable-reading-from-canvas', 
+                '--disable-renderer-accessibility', 
+                '--disable-renderer-backgrounding', 
+                '--disable-shader-name-hashing', 
+                '--disable-smooth-scrolling',
+                '--disable-speech-api',
+                '--disable-speech-synthesis-api',
+                '--disable-sync',
+                '--disable-translate',
+
+                '--ignore-certificate-errors',
+
+                '--metrics-recording-only',
+                '--no-first-run',
+                '--no-experiments',
+                '--safebrowsing-disable-auto-update',
+                #'--enable-automation',
+                '--password-store=basic',
+                '--use-mock-keychain',
+                '--lang=zh-TW',
+                '--stable-release-mode',
+                '--use-mobile-user-agent', 
+                '--webview-disable-safebrowsing-support',
+                #'--no-sandbox',
+                #'--incognito',
+            ]
+
+            chrome_options = webdriver.ChromeOptions()
+
+            # for navigator.webdriver
+            chrome_options.add_experimental_option("excludeSwitches", ['enable-automation'])
+            chrome_options.add_experimental_option('useAutomationExtension', False)
+            chrome_options.add_experimental_option("prefs", {"profile.password_manager_enabled": False, "credentials_enable_service": False,'profile.default_content_setting_values':{'notifications':2}})
+
+            if 'kktix.c' in homepage:
+                #chrome_options.add_argument('blink-settings=imagesEnabled=false')
+                pass
+
+            # default os is linux/mac
+            chromedriver_path =Root_Dir+ "webdriver/chromedriver"
+            if platform.system()=="windows":
+                chromedriver_path =Root_Dir+ "webdriver/chromedriver.exe"
+
+            #caps = DesiredCapabilities().CHROME
+            caps = chrome_options.to_capabilities()
+
+            #caps["pageLoadStrategy"] = u"normal"  #  complete
+            caps["pageLoadStrategy"] = u"eager"  #  interactive
+            #caps["pageLoadStrategy"] = u"none"
+            
+            #caps["unhandledPromptBehavior"] = u"dismiss and notify"  #  default
+            caps["unhandledPromptBehavior"] = u"ignore"
+            #caps["unhandledPromptBehavior"] = u"dismiss"
+
+            #print("caps:", caps)
+
+            # method 1:
+            #driver = webdriver.Chrome(executable_path=chromedriver_path, options=chrome_options, desired_capabilities=caps)
+            #driver = webdriver.Chrome(executable_path=chromedriver_path, options=chrome_options)
+            
+            # method 2:
+            #driver = webdriver.Remote(command_executor='http://127.0.0.1:9515', desired_capabilities=caps)
+            #driver = webdriver.Remote(command_executor='http://127.0.0.1:9515', options=chrome_options)
+
+            # method 3:
+            #driver = webdriver.Chrome(desired_capabilities=caps, executable_path=chromedriver_path)
+
+            # method 4:
+            chrome_service = Service(chromedriver_path)
+            #driver = webdriver.Chrome(options=chrome_options, service=chrome_service)
+            
+            # method 5: uc
+            '''
+            options = uc.ChromeOptions()
+            options.add_argument("--no-first-run --no-service-autorun --password-store=basic")
+            options.page_load_strategy="eager"
+            #print("strategy", options.page_load_strategy)
+            if os.path.exists(chromedriver_path):
+                print("Use user driver path:", chromedriver_path)
+                driver = uc.Chrome(service=chrome_service, options=options, suppress_welcome=False)
+            else:
+                print("Not assign driver path...")
+                driver = uc.Chrome(options=options, suppress_welcome=False)
+            '''
+
+            # method 6: Selenium Stealth
+            driver = webdriver.Chrome(service=chrome_service, options=chrome_options)
+
+            # Selenium Stealth settings
+            stealth(driver,
+                  languages=["zh-TW", "zh"],
+                  vendor="Google Inc.",
+                  platform="Win32",
+                  webgl_vendor="Intel Inc.",
+                  renderer="Intel Iris OpenGL Engine",
+                  fix_hairline=True,
+              )
+
+        if browser == "firefox":
+            # default os is linux/mac
+            chromedriver_path =Root_Dir+ "webdriver/geckodriver"
+            if platform.system()=="windows":
+                chromedriver_path =Root_Dir+ "webdriver/geckodriver.exe"
+
+            firefox_service = Service(chromedriver_path)
+            driver = webdriver.Firefox(service=firefox_service)
+
+        time.sleep(1.0)
+        try:
+            window_handles_count = len(driver.window_handles)
+            if window_handles_count >= 1:
+                driver.switch_to.window(driver.window_handles[1])
+                driver.close()
+                driver.switch_to.window(driver.window_handles[0])
+        except Exception as excSwithFail:
             pass
-
-        # default os is linux/mac
-        chromedriver_path =Root_Dir+ "webdriver/chromedriver"
-        if platform.system()=="windows":
-            chromedriver_path =Root_Dir+ "webdriver/chromedriver.exe"
-
-        if not 'kktix.c' in homepage:
-            extension_path = Root_Dir + "webdriver/AdBlock.crx"
-            extension_file_exist = os.path.isfile(extension_path)
-
-            if extension_file_exist:
-                chrome_options.add_extension(extension_path)
-            else:
-                print("extention not exist:", extension_path)
-
-            extension_path = Root_Dir + "webdriver/BlockYourselfFromAnalytics.crx"
-            extension_file_exist = os.path.isfile(extension_path)
-
-            if extension_file_exist:
-                chrome_options.add_extension(extension_path)
-            else:
-                print("extention not exist:", extension_path)
-
-        #caps = DesiredCapabilities().CHROME
-        caps = chrome_options.to_capabilities()
-
-        #caps["pageLoadStrategy"] = u"normal"  #  complete
-        caps["pageLoadStrategy"] = u"eager"  #  interactive
-        #caps["pageLoadStrategy"] = u"none"
+        driver.get(homepage)
         
-        #caps["unhandledPromptBehavior"] = u"dismiss and notify"  #  default
-        caps["unhandledPromptBehavior"] = u"ignore"
-        #caps["unhandledPromptBehavior"] = u"dismiss"
+    else:
+        print("Config error!")
 
-        #print("caps:", caps)
-
-        # method 1:
-        #driver = webdriver.Chrome(executable_path=chromedriver_path, options=chrome_options, desired_capabilities=caps)
-        #driver = webdriver.Chrome(executable_path=chromedriver_path, options=chrome_options)
-        
-        # method 2:
-        #driver = webdriver.Remote(command_executor='http://127.0.0.1:9515', desired_capabilities=caps)
-        #driver = webdriver.Remote(command_executor='http://127.0.0.1:9515', options=chrome_options)
-
-        # method 3:
-        driver = webdriver.Chrome(desired_capabilities=caps, executable_path=chromedriver_path)
-
-
-
-    if browser == "firefox":
-        # default os is linux/mac
-        chromedriver_path =Root_Dir+ "webdriver/geckodriver"
-        if platform.system()=="windows":
-            chromedriver_path =Root_Dir+ "webdriver/geckodriver.exe"
-        driver = webdriver.Firefox(executable_path=chromedriver_path)
-
-    time.sleep(1.0)
-    try:
-        window_handles_count = len(driver.window_handles)
-        if window_handles_count >= 1:
-            driver.switch_to.window(driver.window_handles[1])
-            driver.close()
-            driver.switch_to.window(driver.window_handles[0])
-    except Exception as excSwithFail:
-        pass
-    driver.get(homepage)
-else:
-    print("Config error!")
+    return driver
 
 # common functions.
 def find_between( s, first, last ):
@@ -702,7 +776,7 @@ def get_answer_list_by_question(captcha_text_div_text):
     return return_list, my_answer_delimitor
 
 # from detail to game
-def tixcraft_redirect(url):
+def tixcraft_redirect(driver, url):
     game_name = ""
 
     # get game_name from url
@@ -717,7 +791,10 @@ def tixcraft_redirect(url):
         #entry_url = "tixcraft.com/activity/game/%s" % (game_name,)
         driver.get(entry_url)
 
-def date_auto_select(url):
+def date_auto_select(driver, url, date_auto_select_mode, date_keyword):
+    debug_date_select = True    # debug.
+    debug_date_select = False   # online
+
     game_name = ""
 
     if "/activity/game/" in url:
@@ -725,9 +802,18 @@ def date_auto_select(url):
         if len(url_split) >= 6:
             game_name = url_split[5]
 
+    if debug_date_select:
+        print('get date game_name:', game_name)
+        print("date_auto_select_mode:", date_auto_select_mode)
+        print("date_keyword:", date_keyword)
+
+
     # choose date
     if "/activity/game/%s" % (game_name,) in url:
         if len(date_keyword) == 0:
+            if debug_date_select:
+                print("date keyword is empty.")
+
             el = None
 
             if date_auto_select_mode == CONST_FROM_TOP_TO_BOTTOM:
@@ -746,6 +832,9 @@ def date_auto_select(url):
                     pass
                     #print("find a tag fail")
 
+            if debug_date_select:
+                print("date keyword is empty.")
+
             if el is not None:
                 # first date.
                 try:
@@ -753,6 +842,9 @@ def date_auto_select(url):
                 except Exception as exc:
                     print("try to click .btn-next fail")
         else:
+            if debug_date_select:
+                print("date keyword:", date_keyword)
+
             # match keyword.
             date_list = None
             try:
@@ -808,7 +900,13 @@ def date_auto_select(url):
 # RETURN: 
 #   is_need_refresh
 #   areas
-def get_tixcraft_target_area(el, area_keyword):
+def get_tixcraft_target_area(el, area_keyword, area_auto_select_mode, pass_1_seat_remaining_enable):
+    debugMode = True
+    debugMode = False       # for online
+
+    if debugMode:
+        print("testing keyword:", area_keyword)
+
     is_need_refresh = False
     areas = None
 
@@ -859,6 +957,8 @@ def get_tixcraft_target_area(el, area_keyword):
                     is_append_this_row = True
 
                 if is_append_this_row:
+                    if debugMode:
+                        print("pass_1_seat_remaining_enable:", pass_1_seat_remaining_enable)
                     if pass_1_seat_remaining_enable:
                         area_item_font_el = None
                         try:
@@ -866,11 +966,16 @@ def get_tixcraft_target_area(el, area_keyword):
                             area_item_font_el = row.find_element(By.TAG_NAME, 'font')
                             if not area_item_font_el is None:
                                 font_el_text = area_item_font_el.text
-                                #print('font tag text:', font_el_text)
-                                if font_el_text in CONT_STRING_1_SEATS_REMAINING:
-                                    #print("match pass 1 seats remaining 1 full text:", row_text)
-                                    #print("match pass 1 seats remaining 2 font text:", font_el_text)
-                                    is_append_this_row = False
+                                font_el_text = "@%s@" % (font_el_text)
+                                if debugMode:
+                                    print('font tag text:', font_el_text)
+                                    pass
+                                for check_item in CONT_STRING_1_SEATS_REMAINING:
+                                    if check_item in font_el_text:
+                                        if debugMode:
+                                            print("match pass 1 seats remaining 1 full text:", row_text)
+                                            print("match pass 1 seats remaining 2 font text:", font_el_text)
+                                        is_append_this_row = False
                             else:
                                 #print("row withou font tag.")
                                 pass
@@ -878,14 +983,18 @@ def get_tixcraft_target_area(el, area_keyword):
                             #print("find font text in a tag fail:", exc)
                             pass
 
+                if debugMode:
+                    print("is_append_this_row:", is_append_this_row)
+
                 if is_append_this_row:
                     areas.append(row)
 
                     if area_auto_select_mode == CONST_FROM_TOP_TO_BOTTOM:
                         print("only need first item, break area list loop.")
                         break
-                    #print("row_text:" + row_text)
-                    #print("match:" + area_keyword)
+                    if debugMode:
+                        print("row_text:" + row_text)
+                        print("match:" + area_keyword)
         
         if len(areas) == 0:
             areas = None
@@ -895,7 +1004,13 @@ def get_tixcraft_target_area(el, area_keyword):
 
 # PS: auto refresh condition 1: no keyword + no hyperlink.
 # PS: auto refresh condition 2: with keyword + no hyperlink.
-def area_auto_select(url):
+def area_auto_select(driver, url, area_keyword_1, area_keyword_2, area_auto_select_mode, pass_1_seat_remaining_enable):
+    debugMode = True
+    debugMode = False       # for online
+
+    if debugMode:
+        print("area_keyword_1, area_keyword_2:", area_keyword_1, area_keyword_2)
+
     if '/ticket/area/' in url:
         #driver.switch_to.default_content()
 
@@ -906,11 +1021,19 @@ def area_auto_select(url):
             print("find .zone fail, do nothing.")
 
         if el is not None:
-            is_need_refresh, areas = get_tixcraft_target_area(el, area_keyword_1)
-            if not is_need_refresh:
+            is_need_refresh, areas = get_tixcraft_target_area(el, area_keyword_1, area_auto_select_mode, pass_1_seat_remaining_enable)
+            if debugMode:
+                print("is_need_refresh for keyword1:", is_need_refresh)
+
+            if is_need_refresh:
                 if areas is None:
-                    print("use area keyword #2", area_keyword_2)
-                    is_need_refresh, areas = get_tixcraft_target_area(el, area_keyword_2)
+                    if debugMode:
+                        print("use area keyword #2", area_keyword_2)
+                    # only when keyword#2 filled to query.
+                    if len(area_keyword_2) > 0 :
+                        is_need_refresh, areas = get_tixcraft_target_area(el, area_keyword_2, area_auto_select_mode, pass_1_seat_remaining_enable)
+                        if debugMode:
+                            print("is_need_refresh for keyword2:", is_need_refresh)
 
             area_target = None
             if areas is not None:
@@ -933,11 +1056,11 @@ def area_auto_select(url):
 
             if area_target is not None:
                 try:
-                    print("area text", area_target.text)
+                    print("area text:", area_target.text)
                     area_target.click()
                 except Exception as exc:
                     print("click area a link fail, start to retry...")
-                    time.sleep(0.2)
+                    time.sleep(0.1)
                     try:
                         area_target.click()
                     except Exception as exc:
@@ -1082,7 +1205,7 @@ def ticket_number_auto_fill(url, form_select):
     except Exception as exc:
         print("find form_verifyCode fail")
 
-def tixcraft_verify(url):
+def tixcraft_verify(driver, url):
     ret = False
 
     captcha_password_string = None
@@ -1213,7 +1336,7 @@ def tixcraft_verify(url):
 
     return ret
 
-def tixcraft_ticket_main(url, is_verifyCode_editing):
+def tixcraft_ticket_main(driver, url, is_verifyCode_editing):
     form_select = None
     try:
         #form_select = driver.find_element(By.TAG_NAME, 'select')
@@ -1257,7 +1380,7 @@ def tixcraft_ticket_main(url, is_verifyCode_editing):
 #   : 1: /events/xxx
 #   : 2: /events/xxx/registrations/new
 #   : This is for case-1.
-def kktix_events_press_next_button():
+def kktix_events_press_next_button(driver):
     ret = False
 
     # let javascript to enable button.
@@ -1274,7 +1397,7 @@ def kktix_events_press_next_button():
 
     except Exception as exc:
         print("wait form-actions div wait to be clickable Exception:")
-        print(exc)
+        #print(exc)
         pass
 
         # retry once
@@ -1293,7 +1416,7 @@ def kktix_events_press_next_button():
     return ret
 
 #   : This is for case-2 next button.
-def kktix_press_next_button():
+def kktix_press_next_button(driver):
     ret = False
 
     # let javascript to enable button.
@@ -1389,7 +1512,7 @@ def kktix_input_captcha_text(captcha_inner_div, captcha_password_string, force_o
 
     return ret
 
-def kktix_assign_ticket_number():
+def kktix_assign_ticket_number(driver, ticket_number, kktix_area_keyword):
     ret = False
 
     areas = None
@@ -1563,7 +1686,7 @@ def kktix_get_web_datetime(url, registrationsNewApp_div):
 
     return web_datetime
 
-def kktix_check_agree_checkbox():
+def kktix_check_agree_checkbox(driver):
     is_need_refresh = False
     is_finish_checkbox_click = False
 
@@ -1644,14 +1767,14 @@ def kktix_check_register_status(url):
     #print("registerStatus:", registerStatus)
     return registerStatus
 
-def kktix_reg_new_main(url, answer_index, registrationsNewApp_div, is_finish_checkbox_click):
+def kktix_reg_new_main(url, answer_index, registrationsNewApp_div, is_finish_checkbox_click, auto_fill_ticket_number, ticket_number, kktix_area_keyword):
     #---------------------------
     # part 2: ticket number
     #---------------------------
     is_assign_ticket_number = False
     if auto_fill_ticket_number:
         for retry_index in range(10):
-            is_assign_ticket_number = kktix_assign_ticket_number()
+            is_assign_ticket_number = kktix_assign_ticket_number(driver, ticket_number, kktix_area_keyword)
             if is_assign_ticket_number:
                 break
     #print('is_assign_ticket_number:', is_assign_ticket_number)
@@ -2030,7 +2153,7 @@ def kktix_reg_new_main(url, answer_index, registrationsNewApp_div, is_finish_che
             if not is_finish_checkbox_click:
                 for retry_i in range(10):
                     # retry again.
-                    is_need_refresh, is_finish_checkbox_click = kktix_check_agree_checkbox()
+                    is_need_refresh, is_finish_checkbox_click = kktix_check_agree_checkbox(driver)
                     time.sleep(0.1)
                     if is_finish_checkbox_click:
                         break
@@ -2040,7 +2163,7 @@ def kktix_reg_new_main(url, answer_index, registrationsNewApp_div, is_finish_che
                 # normal mode.
                 #print("# normal mode.")
                 if is_finish_checkbox_click:
-                    kktix_press_next_button()
+                    kktix_press_next_button(driver)
                 else:
                     print("unable to assign checkbox value")
             else:
@@ -2048,7 +2171,7 @@ def kktix_reg_new_main(url, answer_index, registrationsNewApp_div, is_finish_che
                     # for easy guest mode, we can fill the password correct.
                     #print("for easy guest mode, we can fill the password correct.")
                     if is_finish_checkbox_click:
-                        kktix_press_next_button()
+                        kktix_press_next_button(driver)
                     else:
                         print("unable to assign checkbox value")
                 else:
@@ -2084,7 +2207,7 @@ def kktix_reg_new_main(url, answer_index, registrationsNewApp_div, is_finish_che
                                         print("send ans:" + answer)
                                         captcha_password_string = answer
                                         if kktix_input_captcha_text(captcha_inner_div, captcha_password_string):
-                                            kktix_press_next_button()
+                                            kktix_press_next_button(driver)
                             else:
                                 # exceed index, do nothing.
                                 pass
@@ -2095,7 +2218,7 @@ def kktix_reg_new_main(url, answer_index, registrationsNewApp_div, is_finish_che
 
     return answer_index
 
-def kktix_reg_new(url, answer_index, kktix_register_status_last):
+def kktix_reg_new(driver, url, answer_index, kktix_register_status_last):
     registerStatus = kktix_register_status_last
 
     #---------------------------
@@ -2129,11 +2252,11 @@ def kktix_reg_new(url, answer_index, kktix_register_status_last):
                     is_need_refresh = True
 
     if not is_need_refresh:
-        is_need_refresh, is_finish_checkbox_click = kktix_check_agree_checkbox()
+        is_need_refresh, is_finish_checkbox_click = kktix_check_agree_checkbox(driver)
 
         if not is_finish_checkbox_click:
             # retry again.
-            is_need_refresh, is_finish_checkbox_click = kktix_check_agree_checkbox()
+            is_need_refresh, is_finish_checkbox_click = kktix_check_agree_checkbox(driver)
         #print('check agree_terms_checkbox, is_need_refresh:',is_need_refresh)
 
     # check is able to buy.
@@ -2180,7 +2303,7 @@ def kktix_reg_new(url, answer_index, kktix_register_status_last):
             '''
         except Exception as exc:
             pass
-            print("find input fail:", exc)
+            #print("find input fail:", exc)
 
     if is_need_refresh:
         try:
@@ -2194,400 +2317,302 @@ def kktix_reg_new(url, answer_index, kktix_register_status_last):
         answer_index = -1
         registerStatus = None
     else:
-        answer_index = kktix_reg_new_main(url, answer_index, registrationsNewApp_div, is_finish_checkbox_click)
+        global auto_fill_ticket_number
+        global ticket_number
+        global kktix_area_keyword
+        answer_index = kktix_reg_new_main(url, answer_index, registrationsNewApp_div, is_finish_checkbox_click, auto_fill_ticket_number, ticket_number, kktix_area_keyword)
 
 
     return answer_index, registerStatus
 
-def fami_date_auto_select(url):
-    date_list = None
-    try:
-        date_list = driver.find_elements(By.CSS_SELECTOR, '#game_page > table > tbody > tr:nth-child(4) > td > table > tbody > tr')
-    except Exception as exc:
-        #print("find #game_page date list fail")
-        pass
-
-    if date_list is not None:
-        if len(date_keyword) == 0:
-            el = None
-
-            if date_auto_select_mode == CONST_FROM_TOP_TO_BOTTOM:
-
-                row_index = 0
-                for row in date_list:
-                    row_index += 1
-
-                    row_is_enabled=False
-                    try:
-                        row_is_enabled = row.is_enabled()
-                    except Exception as exc:
-                        pass
-
-                    if row_is_enabled:
-                        row_text = ""
-                        try:
-                            row_text = row.text
-                        except Exception as exc:
-                            #print("get text fail")
-                            break
-
-                        #print("date row_text:", row_index, row_text)
-                        if len(row_text) > 0 and "/" in row_text:
-                            try:
-                                el = row.find_element(By.TAG_NAME, 'img')
-                                if el is not None:
-                                    #print("bingo, found first date button")
-                                    break
-                            except Exception as exc:
-                                print("find date image button fail")
-            else:
-                # from bottom to top
-                print("not implement!")
-
-                row_index = 0
-                for row in date_list:
-                    row_index += 1
-
-                    row_is_enabled=False
-                    try:
-                        row_is_enabled = row.is_enabled()
-                    except Exception as exc:
-                        pass
-
-                    if row_is_enabled:
-                        row_text = ""
-                        try:
-                            row_text = row.text
-                        except Exception as exc:
-                            print("get text fail")
-                            break
-
-                        #print("date row_text:", row_index, row_text)
-                        if len(row_text) > 0 and "/" in row_text:
-                            try:
-                                el = row.find_element(By.TAG_NAME, 'img')
-                                if el is not None:
-                                    print("bingo, found first date button")
-                                    break
-                            except Exception as exc:
-                                print("find date image button fail")
-
-            if el is not None:
-                # first date.
-                try:
-                    el.click()
-                except Exception as exc:
-                    #print("try to click date image button fail")
-                    pass
-
-        else:
-        # match keyword.
-            match_keyword_row = False
-
-            row_index = 0
-            for row in date_list:
-                row_index += 1
-
-                row_text = ""
-                try:
-                    row_text = row.text
-                except Exception as exc:
-                    print("get text fail")
-                    break
-
-                if len(row_text) > 0:
-                    if date_keyword in row_text:
-                        match_keyword_row = True
-
-                        el = None
-                        try:
-                            el = row.find_element(By.TAG_NAME, 'img')
-                        except Exception as exc:
-                            print("find date image button fail")
-
-                        if el is not None:
-                            # first date.
-                            try:
-                                el.click()
-                            except Exception as exc:
-                                print("try to click date image button fail")
-
-                    if match_keyword_row:
-                        break
 
 
 # PURPOSE: get target area list.
-def get_fami_target_area(area_keyword):
+# PS: this is main block, use keyword to get rows.
+# PS: it seems use date_auto_select_mode instead of area_auto_select_mode
+def get_fami_target_area(date_keyword, area_keyword_1, area_keyword_2, area_auto_select_mode):
+    show_debug_message = True       # debug.
+    show_debug_message = False      # online
+
     areas = None
 
     area_list = None
     try:
-        #print("try to find area block")
-        my_css_selector = "#game_page > table > tbody > tr:nth-child(4) > td > table:nth-child(5) > tbody > tr > td:nth-child(1) > table > tbody > tr:nth-child(2) > td:nth-child(2) > table > tbody > tr:nth-child(2) > td > table > tbody > tr"
+        if show_debug_message:
+            print("try to find area block by keywords...")
+
+        my_css_selector = "table.session__list > tbody > tr"
         area_list = driver.find_elements(By.CSS_SELECTOR, my_css_selector)
         if area_list is not None:
-            if len(area_list) > 0:
+            area_list_length = len(area_list)
+            if show_debug_message:
+                print("lenth of area rows:", area_list_length)
+
+            if area_list_length > 0:
                 ret = True
 
-                if len(area_keyword) == 0:
-                    areas = area_list
-                else:
-                    # match keyword.
-                    areas = []
+                areas = []
+
+                if len(date_keyword)==0 and len(area_keyword_1)==0 and len(area_keyword_2) == 0:
+                    # select all.
+                    # PS: must travel to row buttons.
+                    #areas = area_list
 
                     row_index = 0
                     for row in area_list:
                         row_index += 1
+                        #print("row index:", row_index)
 
-                        row_is_enabled=False
-                        try:
-                            row_is_enabled = row.is_enabled()
-                        except Exception as exc:
-                            pass
+                        is_enabled = False
+                        my_css_selector = "button"
+                        td_button = row.find_element(By.TAG_NAME , my_css_selector)
+                        if td_button is not None:
+                            is_enabled = td_button.is_enabled()
 
-                        if row_is_enabled:
-                            row_text = ""
-                            try:
-                                row_text = row.text
-                            except Exception as exc:
-                                print("get text fail")
+                        if not is_enabled:
+                            # must skip this row.
+                            continue
+                        else:
+                            if show_debug_message:
+                                print("row button is disabled!")
+
+                        if is_enabled:
+                            areas.append(td_button)
+
+                            # PS: it seems use date_auto_select_mode instead of area_auto_select_mode
+                            if area_auto_select_mode == CONST_FROM_TOP_TO_BOTTOM:
+                                print("only need first item, break area list loop.")
                                 break
 
-                            if len(row_text) > 0:
-                                #print("area row_text:", row_index, row_text)
-                                if area_keyword in row_text:
-                                    areas.append(row)
-                    if len(areas)==0:
-                        areas = None
+                else:
+                    # match keyword.
+                    row_index = 0
+                    for row in area_list:
+                        row_index += 1
+                        #print("row index:", row_index)
+
+                        date_html_text = ""
+                        area_html_text = ""
+
+                        my_css_selector = "td:nth-child(1)"
+                        td_date = row.find_element(By.CSS_SELECTOR, my_css_selector)
+                        if td_date is not None:
+                            #print("date:", td_date.text)
+                            date_html_text = td_date.text
+
+                        my_css_selector = "td:nth-child(2)"
+                        td_area = row.find_element(By.CSS_SELECTOR, my_css_selector)
+                        if td_area is not None:
+                            #print("area:", td_area.text)
+                            area_html_text = td_area.text
+
+
+                        is_enabled = False
+                        my_css_selector = "button"
+                        td_button = row.find_element(By.TAG_NAME , my_css_selector)
+                        if td_button is not None:
+                            is_enabled = td_button.is_enabled()
+
+                        if not is_enabled:
+                            # must skip this row.
+                            continue
+                        else:
+                            if show_debug_message:
+                                print("row button is disabled!")
+
+                        row_text = ""
+                        try:
+                            row_text = row.text
+                        except Exception as exc:
+                            print("get row text fail")
+                            break
+
+                        if len(row_text) > 0:
+                            # check date.
+                            is_match_date = False
+                            if len(date_keyword) > 0:
+                                if date_keyword in date_html_text:
+                                    #print("is_match_date")
+                                    is_match_date = True
+                            else:
+                                is_match_date = True
+
+                            # check area.
+                            is_match_area = False
+                            if len(area_keyword_1) > 0:
+                                if area_keyword_1 in area_html_text:
+                                    #print("is_match_area area_keyword_1")
+                                    is_match_area = True
+                                # check keyword 2
+                                if len(area_keyword_2) > 0:
+                                    if area_keyword_2 in area_html_text:
+                                        #print("is_match_area area_keyword_2")
+                                        is_match_area = True
+                            else:
+                                is_match_area = True
+                            
+                            if is_match_date and is_match_area:
+                                #print("bingo, row text:", row_text)
+                                #areas.append(row)
+                                # add button instead of row.
+                                areas.append(td_button)
+
+                                if area_auto_select_mode == CONST_FROM_TOP_TO_BOTTOM:
+                                    print("only need first item, break area list loop.")
+                                    break
+
+                return_row_count = len(areas)
+                if show_debug_message:
+                    print("return_row_count:", return_row_count)
+                if return_row_count==0:
+                    areas = None
 
     except Exception as exc:
-        print("find #game_page date list fail")
-        #print(exc)
+        pass
+        print("find #session date list fail")
+        if show_debug_message:
+            print(exc)
 
     return areas
 
-# purpose: area auto select
-# return:
-#   True: area block appear.
-#   False: area block not appear.
-# ps: return value for date auto select.
-def fami_area_auto_select(url):
-    ret = False
 
-    areas = get_fami_target_area(area_keyword_1)
-    if areas is None:
-        print("use area keyword #2", area_keyword_2)
-        areas = get_fami_target_area(area_keyword_2)
-
-
-    area = None
-    if areas is not None:
-        #print("area_auto_select_mode", area_auto_select_mode)
-        #print("len(areas)", len(areas))
-        if len(areas) > 0:
-            target_row_index = 0
-
-            if area_auto_select_mode == CONST_FROM_TOP_TO_BOTTOM:
-                pass
-
-            if area_auto_select_mode == CONST_FROM_BOTTOM_TO_TOP:
-                target_row_index = len(areas)-1
-
-            if area_auto_select_mode == CONST_RANDOM:
-                target_row_index = random.randint(0,len(areas)-1)
-
-            #print("target_row_index", target_row_index)
-            area = areas[target_row_index]
-
-    if area is not None:
-        try:
-            #print("area text", area.text)
-            area.click()
-        except Exception as exc:
-            print("click area a link fail")
-            print(exc)
-            pass
-
-    return ret
-
-# purpose: ticket number auto select
-# return:
-#   True: ticket number block appear.
-#   False: ticket number block not appear.
-# ps: return value for area auto select.
-def fami_ticket_number_auto_select(url):
-    ret = False
-    is_assign_ticket_number = False
-
-    ticket_number_div = None
-    try:
-        ticket_number_div = driver.find_element(By.CSS_SELECTOR, '#Form_price > table > tbody > tr:nth-child(4) > td > table:nth-child(5) > tbody > tr:nth-child(2) > td > table > tbody > tr:nth-child(3) > td:nth-child(4) > span')
-        if ticket_number_div is not None:
-            el = None
-            try:
-                el = ticket_number_div.find_element(By.TAG_NAME, "select")
-                if el is not None:
-                    ret = True
-                    #print("bingo, found ticket_number select")
-
-                    ticket_number_select = Select(el)
-                    if ticket_number_select is not None:
-                        try:
-                            #print("get select ticket value:" + Select(ticket_number_select).first_selected_option.text)
-                            if ticket_number_select.first_selected_option.text=="0":
-                                # target ticket number
-                                ticket_number_select.select_by_visible_text(ticket_number)
-                                is_assign_ticket_number = True
-                        except Exception as exc:
-                            #print("select_by_visible_text ticket_number fail")
-                            #print(exc)
-                            pass
-
-                            try:
-                                # try target ticket number twice
-                                ticket_number_select.select_by_visible_text(ticket_number)
-                                is_assign_ticket_number = True
-                            except Exception as exc:
-                                #print("select_by_visible_text ticket_number fail...2")
-                                #print(exc)
-                                pass
-
-                                # try buy one ticket
-                                try:
-                                    ticket_number_select.select_by_visible_text("1")
-                                    is_assign_ticket_number = True
-                                except Exception as exc:
-                                    print("select_by_visible_text 1 fail")
-                                    pass
-
-            except Exception as exc:
-                #print("find ticket_number select fail")
-                #print(exc)
-                pass
-    except Exception as exc:
-        #print("find #Form_price ticket_number div fail")
-        #print(exc)
-        pass
-
-    #print("is_assign_ticket_number", is_assign_ticket_number)
-    time.sleep(0.3)
-
-    wait = WebDriverWait(driver, 5)
-
-    if is_assign_ticket_number:
-        btn_auto_hyperlink_div = None
-        try:
-            btn_auto_hyperlink_div = wait.until(EC.element_to_be_clickable((By.CSS_SELECTOR, '#chose_seat_btn_auto > a')))
-            #btn_auto_hyperlink_div = driver.find_element(By.CSS_SELECTOR, '#chose_seat_btn_auto > a')
-            if btn_auto_hyperlink_div is not None:
-                btn_auto_hyperlink_div.click()
-        except Exception as exc:
-            print("find #chose_seat_btn_auto fail")
-            print(exc)
-
-    return ret
-
-def fami_activity(url):
-    #print("bingo")
-
-    # Python 2 and 3
-    try:
-        # python3 urllib.parse:
-        from urllib.parse import urlparse, parse_qs
-    except ImportError:
-        from urlparse import urlparse, parse_qs
-
-    parsed_url = urlparse(url)
-    qstr=parse_qs(parsed_url.query)
-    code = None
-    if 'code' in qstr:
-        codes = qstr['code']
-        if len(codes) > 0:
-            code = codes[0]
-        #print("qstr:", code)
+def fami_activity(driver, url):
+    #print("fami_activity bingo")
 
     #---------------------------
     # part 1: press "buy" button.
     #---------------------------
-
     fami_start_to_buy_button = None
     try:
-        fami_start_to_buy_button = driver.find_element(By.ID, 'under_img_order_buy')
+        fami_start_to_buy_button = driver.find_element(By.ID, 'buyWaiting')
         if fami_start_to_buy_button is not None:
-            if True:
-            #if fami_start_to_buy_button.is_displayed():
-                if fami_start_to_buy_button.is_enabled():
-                    #print('send click to buy button')
+            if fami_start_to_buy_button.is_enabled():
+                fami_start_to_buy_button.click()
+                time.sleep(0.5)
+    except Exception as exc:
+        pass
+        print("click buyWaiting button fail...")
+        #print(exc)
 
 
-                    js = u'function testajax2(section_id,game_id,activitycode){ \
-    $.ajax({ \
-       type: "POST", \
-       url: "FWT/FWT0000.aspx", \
-       data: { \
-            activitycode: activitycode, \
-            game_id: game_id \
-       }, \
-       success: function(msg){ \
-           var index=msg.indexOf("$(\'#img_order_buy\').click(function() {alert("); \
-           if(index==-1) \
-            $(\'#img_order_buy\').click(); \
-           else \
-            location.reload(); \
-       } \
-     }); \
-} \
-testajax2("","","' + code +'"); \
-                    '
-                    #print("execute js", js)
+def fami_home(driver, url):
+    print("fami_home bingo")
+
+    global is_assign_ticket_number
+    global ticket_number
+
+    global date_keyword
+    global area_keyword_1
+    global area_keyword_2
+
+    global area_auto_select_mode
+
+    is_select_box_visible = False
+    
+    #---------------------------
+    # part 3: fill ticket number.
+    #---------------------------
+    ticket_el = None
+    is_assign_ticket_number = False
+    try:
+        my_css_selector = "tr.ticket > td > select"
+        ticket_el = driver.find_element(By.CSS_SELECTOR, my_css_selector)
+        if ticket_el is not None:
+            if ticket_el.is_enabled():
+                is_select_box_visible = True
+
+            ticket_number_select = Select(ticket_el)
+            if ticket_number_select is not None:
+                try:
+                    #print("get select ticket value:" + Select(ticket_number_select).first_selected_option.text)
+                    if ticket_number_select.first_selected_option.text=="0" or ticket_number_select.first_selected_option.text=="選擇張數":
+                        # target ticket number
+                        ticket_number_select.select_by_visible_text(ticket_number)
+                        is_assign_ticket_number = True
+                except Exception as exc:
+                    print("select_by_visible_text ticket_number fail")
+                    print(exc)
 
                     try:
-                        driver.execute_script(js)
-                        pass
+                        # try target ticket number twice
+                        ticket_number_select.select_by_visible_text(ticket_number)
+                        is_assign_ticket_number = True
                     except Exception as exc:
-                        print("javascript Exception:")
+                        print("select_by_visible_text ticket_number fail...2")
                         print(exc)
-                        pass
 
-                    
-                    #fami_start_to_buy_button.click()
-                    pass
-            else:
-                print('unable to find buy button')
-                pass
-        else:
-            #print("find under_img_order_buy button fail")
-            pass
+                        # try buy one ticket
+                        try:
+                            ticket_number_select.select_by_visible_text("1")
+                            is_assign_ticket_number = True
+                        except Exception as exc:
+                            print("select_by_visible_text 1 fail")
+                            pass
     except Exception as exc:
-        #print("find under_img_order_buy button Exception")
         pass
+        print("click buyWaiting button fail")
+        #print(exc)
 
     #---------------------------
-    # part 4: auto fill ticket number
+    # part 4: press "next" button.
     #---------------------------
+    if is_assign_ticket_number:
+        fami_assign_site_button = None
+        try:
+            my_css_selector = "div.col > a.btn"
+            fami_assign_site_button = driver.find_element(By.CSS_SELECTOR, my_css_selector)
+            if fami_assign_site_button is not None:
+                if fami_assign_site_button.is_enabled():
+                    fami_assign_site_button.click()
+                    time.sleep(0.5)
+        except Exception as exc:
+            print("click buyWaiting button fail")
+            print(exc)
 
-    ticket_number_div_exist = fami_ticket_number_auto_select(url)
-    if ticket_number_div_exist:
-        #print("ticket_number_div_exist appear")
-        pass
-    else:
+
+
+    areas = None
+    if not is_select_box_visible:
         #---------------------------
-        # part 3: auto press area
+        # part 2: select keywords
         #---------------------------
-        if area_auto_select_enable:
-            area_div_exist = fami_area_auto_select(url)
-            if area_div_exist:
-                #print("area appear")
-                pass
-            else:
-                #---------------------------
-                # part 2: auto press date
-                #---------------------------
-                if date_auto_select_enable:
-                    fami_date_auto_select(url)
+        areas = get_fami_target_area(date_keyword, area_keyword_1, area_keyword_2, area_auto_select_mode)
+
+        area_target = None
+        if areas is not None:
+            #print("area_auto_select_mode", area_auto_select_mode)
+            #print("len(areas)", len(areas))
+            if len(areas) > 0:
+                target_row_index = 0
+
+                if area_auto_select_mode == CONST_FROM_TOP_TO_BOTTOM:
+                    pass
+
+                if area_auto_select_mode == CONST_FROM_BOTTOM_TO_TOP:
+                    target_row_index = len(areas)-1
+
+                if area_auto_select_mode == CONST_RANDOM:
+                    target_row_index = random.randint(0,len(areas)-1)
+
+                #print("target_row_index", target_row_index)
+                area_target = areas[target_row_index]
+
+        if area_target is not None:
+            try:
+                #print("area text", area_target.text)
+                area_target.click()
+            except Exception as exc:
+                print("click buy button fail, start to retry...")
+                time.sleep(0.2)
+                try:
+                    area_target.click()
+                except Exception as exc:
+                    print("click buy button fail, after reftry still fail.")
+                    print(exc)
+                    pass
 
 
-def urbtix_ticket_number_auto_select(url):
+def urbtix_ticket_number_auto_select(driver, url, ticket_number):
     ret = False
     is_assign_ticket_number = False
 
@@ -2636,7 +2661,7 @@ def urbtix_ticket_number_auto_select(url):
 #   True: area block appear.
 #   False: area block not appear.
 # ps: return value for date auto select.
-def urbtix_area_auto_select(url):
+def urbtix_area_auto_select(driver, url, kktix_area_keyword):
     ret = False
     areas = None
 
@@ -2721,13 +2746,13 @@ def urbtix_area_auto_select(url):
 
     return ret
 
-def urbtix_next_button_press(url):
+def urbtix_next_button_press(driver, url):
     ret = False
     try:
         el = driver.find_element(By.CSS_SELECTOR, '#express-purchase-btn > div > span')
         if el is not None:
             ret = True
-            print("bingo, found next button")
+            #print("bingo, found next button")
 
             if el.is_enabled():
                 el.click()
@@ -2738,20 +2763,24 @@ def urbtix_next_button_press(url):
 
     return ret
 
-def urbtix_performance(url):
-    #print("urbtix bingo")
+def urbtix_performance(driver, url):
+    #print("urbtix performance bingo")
+
+    global auto_fill_ticket_number
+    global ticket_number
+
+    global kktix_area_keyword
+    global auto_press_next_step_button
 
     if auto_fill_ticket_number:
-        area_div_exist = False
-        if len(kktix_area_keyword) > 0:
-            area_div_exist = urbtix_area_auto_select(url)
+        area_div_exist = urbtix_area_auto_select(driver, url, kktix_area_keyword)
 
-    ticket_number_select_exist, is_assign_ticket_number = urbtix_ticket_number_auto_select(url)
+    ticket_number_select_exist, is_assign_ticket_number = urbtix_ticket_number_auto_select(driver, url, ticket_number)
 
     # todo.
     if auto_press_next_step_button:
         if is_assign_ticket_number:
-            urbtix_next_button_press(url)
+            urbtix_next_button_press(driver, url)
 
 # purpose: area auto select
 # return:
@@ -2970,7 +2999,7 @@ def cityline_next_button_press(url):
 
     return ret
 
-def cityline_event(url):
+def cityline_event(driver, url):
     ret = False
 
     is_non_member_displayed = False
@@ -3045,10 +3074,15 @@ def cityline_captcha_auto_focus(url):
     return ret
 
 
-def cityline_performance(url):
+def cityline_performance(driver, url):
     #print("cityline bingo")
     if "performance.do;" in url:
         cityline_captcha_auto_focus(url)
+
+    global auto_fill_ticket_number
+    global kktix_area_keyword
+    global auto_press_next_step_button
+    global is_assign_ticket_number
 
     if "?cid=" in url:
         if auto_fill_ticket_number:
@@ -3071,7 +3105,7 @@ def cityline_performance(url):
                                 break
 
 
-def facebook_login(url):
+def facebook_login(driver, url):
     ret = False
     try:
         el = driver.find_element(By.CSS_SELECTOR, '#email')
@@ -3091,6 +3125,9 @@ def facebook_login(url):
 
 
 def main():
+    global driver
+    driver = load_config_from_local(driver)
+
     # internal variable. 說明：這是一個內部變數，請略過。
     url = ""
     last_url = ""
@@ -3101,10 +3138,19 @@ def main():
     answer_index = -1
     kktix_register_status_last = None
 
+    global debugMode
+    if debugMode:
+        print("Start to looping, detect browser url...")
+
     while True:
         time.sleep(0.1)
 
         is_alert_popup = False
+
+        # pass if driver not loaded.
+        if driver is None:
+            continue
+
         '''
         try:
             if not driver is None:
@@ -3227,7 +3273,7 @@ def main():
             if len(str_exc)==0:
                 str_exc = repr(exc)
             
-            exit_bot_error_strings = [u'Max retries exceeded with url', u'chrome not reachable']
+            exit_bot_error_strings = [u'Max retries exceeded with url', u'chrome not reachable', u'without establishing a connection']
             for str_chrome_not_reachable in exit_bot_error_strings:
                 # for python2
                 try:
@@ -3285,6 +3331,9 @@ def main():
         '''
 
         # 說明：輸出目前網址，覺得吵的話，請註解掉這行。
+        if debugMode:
+            print("url:", url)
+
         if len(url) > 0 :
             if url != last_url:
                 print(url)
@@ -3292,7 +3341,7 @@ def main():
 
         # for Max's test.
         if '/Downloads/varify.html' in url:
-            tixcraft_verify(url)
+            tixcraft_verify(driver, url)
 
         tixcraft_family = False
         if 'tixcraft.com' in url:
@@ -3302,6 +3351,7 @@ def main():
             tixcraft_family = True
 
         if tixcraft_family:
+            #print("tixcraft_family entry.")
             if '/ticket/order' in url:
                 # do nothing.
                 continue
@@ -3310,30 +3360,41 @@ def main():
                 # do nothing.
                 continue
 
-            tixcraft_redirect(url)
+            tixcraft_redirect(driver, url)
+
+            global date_auto_select_enable
+            global date_auto_select_mode
+            global date_keyword
 
             if date_auto_select_enable:
-                date_auto_select(url)
+                date_auto_select(driver, url, date_auto_select_mode, date_keyword)
 
             # choose area
-            if area_auto_select_enable:
-                area_auto_select(url)
+            global area_auto_select_enable
+            global pass_1_seat_remaining_enable
 
+            global area_keyword_1
+            global area_keyword_2
+
+            if area_auto_select_enable:
+                area_auto_select(driver, url, area_keyword_1, area_keyword_2, area_auto_select_mode, pass_1_seat_remaining_enable)
 
             if '/ticket/verify/' in url:
-                tixcraft_verify(url)
+                tixcraft_verify(driver, url)
 
             # main app, to select ticket number.
             if '/ticket/ticket/' in url:
-                is_verifyCode_editing = tixcraft_ticket_main(url, is_verifyCode_editing)
+                is_verifyCode_editing = tixcraft_ticket_main(driver, url, is_verifyCode_editing)
             else:
                 # not is input verify code, reset flag.
                 is_verifyCode_editing = False
 
+        global auto_press_next_step_button
+
         # for kktix.cc and kktix.com
         if 'kktix.c' in url:
             if '/registrations/new' in url:
-                answer_index, kktix_register_status_last = kktix_reg_new(url, answer_index, kktix_register_status_last)
+                answer_index, kktix_register_status_last = kktix_reg_new(driver, url, answer_index, kktix_register_status_last)
             else:
                 is_event_page = False
                 if '/events/' in url:
@@ -3344,37 +3405,42 @@ def main():
                     if auto_press_next_step_button:
                         # pass switch check.
                         #print("should press next here.")
-                        kktix_events_press_next_button()
-
+                        kktix_events_press_next_button(driver)
 
                 answer_index = -1
                 kktix_register_status_last = None
 
         # for famiticket
         if 'famiticket.com' in url:
-            if 'activity_info.aspx' in url:
-                fami_activity(url)
+            if '/Home/Activity/Info/' in url:
+                fami_activity(driver, url)
+            if '/Sales/Home/Index/' in url:
+                fami_home(driver, url)
+
 
         # for urbtix
         # https://ticket.urbtix.hk/internet/secure/event/37348/performanceDetail
         if 'urbtix.hk' in url:
+        #if False:
             # http://msg.urbtix.hk
             if 'msg.urbtix.hk' in url:
                 # delay to avoid ip block.
-                time.sleep(1.1)
-                driver.get('http://www.urbtix.hk/')
+                time.sleep(1.0)
+                driver.get('https://www.urbtix.hk/')
+                pass
             # http://busy.urbtix.hk
             if 'busy.urbtix.hk' in url:
                 # delay to avoid ip block.
-                time.sleep(1.1)
-                driver.get('http://www.urbtix.hk/')
+                time.sleep(1.0)
+                driver.get('https://www.urbtix.hk/')
+                pass
 
             if '/performanceDetail/' in url:
-                urbtix_performance(url)
+                urbtix_performance(driver, url)
 
         if 'cityline.com' in url:
             if '/event.do' in url:
-                cityline_event(url)
+                cityline_event(driver, url)
                 #pass
 
             if '/Events.do' in url:
@@ -3385,6 +3451,7 @@ def main():
                         pass
 
             if '/performance.do' in url:
-                cityline_performance(url)
+                cityline_performance(driver, url)
 
-main()
+if __name__ == "__main__":
+    main()

@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 #encoding=utf-8
 
 try:
@@ -14,9 +14,10 @@ except ImportError:
 
 import os
 import sys
+import platform
 import json
 
-CONST_APP_VERSION = u"MaxBot (2021.03.22)"
+CONST_APP_VERSION = u"MaxBot (2022.02.19)"
 
 CONST_FROM_TOP_TO_BOTTOM = u"from top to bottom"
 CONST_FROM_BOTTOM_TO_TOP = u"from bottom to top"
@@ -66,7 +67,7 @@ def btn_save_act(slience_mode=False):
 
         global combo_homepage
         global combo_browser
-        global txt_ticket_number
+        global combo_ticket_number
         #global txt_facebook_account
     
         global chk_state_auto_press_next_step_button
@@ -103,11 +104,11 @@ def btn_save_act(slience_mode=False):
                 config_dict["browser"] = combo_browser.get().strip()
 
         if is_all_data_correct:
-            if txt_ticket_number.get().strip()=="":
+            if combo_ticket_number.get().strip()=="":
                 is_all_data_correct = False
-                messagebox.showerror("Error", "Please enter text")
+                messagebox.showerror("Error", "Please select a value")
             else:
-                config_dict["ticket_number"] = int(txt_ticket_number.get().strip())
+                config_dict["ticket_number"] = int(combo_ticket_number.get().strip())
 
         if is_all_data_correct:
             #config_dict["facebook_account"] = txt_facebook_account.get().strip()
@@ -146,22 +147,40 @@ def btn_save_act(slience_mode=False):
     return is_all_data_correct
 
 def btn_run_clicked():
+    Root_Dir = ""
     if btn_save_act(slience_mode=True):
         import subprocess
         if hasattr(sys, 'frozen'):
+            print("execute in frozen mode")
             import platform
 
             # check platform here.
-            # for windows.
             if platform.system() == 'Darwin':
-                 subprocess.Popen("./chrome_tixcraft", shell=True)
+                print("execute MacOS python script")
+                subprocess.Popen("./chrome_tixcraft", shell=True)
             if platform.system() == 'Linux':
-                 subprocess.Popen("./chrome_tixcraft", shell=True)
+                print("execute linux binary")
+                subprocess.Popen("./chrome_tixcraft", shell=True)
             if platform.system() == 'Windows':
+                print("execute .exe binary.")
                 subprocess.Popen("chrome_tixcraft.exe", shell=True)
         else:
-            subprocess.Popen("python chrome_tixcraft.py", shell=True)
-
+            #print("execute in shell mode")
+            working_dir = os.path.dirname(os.path.realpath(__file__))
+            #print("script path:", working_dir)
+            #messagebox.showinfo(title="Debug0", message=working_dir)
+            try:
+                s=subprocess.Popen(['python3', 'chrome_tixcraft.py'], cwd=working_dir)
+                #s=subprocess.Popen(['./chrome_tixcraft'], stdout=subprocess.PIPE, stderr=subprocess.PIPE, cwd=working_dir)
+                #s=subprocess.run(['python3', 'chrome_tixcraft.py'], cwd=working_dir)
+                #messagebox.showinfo(title="Debug1", message=str(s))
+            except Exception as exc:
+                try:
+                    s=subprocess.Popen(['python', 'chrome_tixcraft.py'], cwd=working_dir)
+                except Exception as exc:
+                    msg=str(exc)
+                    messagebox.showinfo(title="Debug2", message=msg)
+                    pass
 
 def btn_exit_clicked():
     root.destroy()
@@ -333,7 +352,7 @@ def MainMenu(root):
 
     homepage = None
     browser = None
-    ticket_number = 1
+    ticket_number = "2"
 
     auto_press_next_step_button = False     # default not checked.
     auto_fill_ticket_number = False         # default not checked.
@@ -355,6 +374,9 @@ def MainMenu(root):
 
     pass_1_seat_remaining_enable = False    # default not checked.
 
+    debugMode = False
+
+
     global config_dict
     if not config_dict is None:
         # read config.
@@ -364,9 +386,11 @@ def MainMenu(root):
         if u'browser' in config_dict:
             browser = config_dict["browser"]
 
+        if u'debug' in config_dict:
+            debugMode = config_dict["debug"]
+
         # default ticket number
         # 說明：自動選擇的票數
-        ticket_number = "2"
         if u'ticket_number' in config_dict:
             ticket_number = str(config_dict["ticket_number"])
 
@@ -440,6 +464,8 @@ def MainMenu(root):
                 pass_1_seat_remaining_enable = config_dict["tixcraft"]["pass_1_seat_remaining"]
 
         # output config:
+        print("setting app version", CONST_APP_VERSION)
+        print("python version", platform.python_version())
         print("homepage", homepage)
         print("browser", browser)
         print("ticket_number", ticket_number)
@@ -467,6 +493,8 @@ def MainMenu(root):
         print("area_keyword_2", area_keyword_2)
 
         print("pass_1_seat_remaining", pass_1_seat_remaining_enable)
+
+        print("debug Mode", debugMode)
     else:
         print('config is none')
 
@@ -511,11 +539,19 @@ def MainMenu(root):
     lbl_ticket_number = Label(frame_group_header, text="Ticket Number")
     lbl_ticket_number.grid(column=0, row=group_row_count, sticky = E)
 
-    global txt_ticket_number
-    global txt_ticket_number_value
-    txt_ticket_number_value = StringVar(frame_group_header, value=ticket_number)
-    txt_ticket_number = Entry(frame_group_header, width=20, textvariable = txt_ticket_number_value)
-    txt_ticket_number.grid(column=1, row=group_row_count, sticky = W)
+    global combo_ticket_number
+    # for text format.
+    '''
+    global combo_ticket_number_value
+    combo_ticket_number_value = StringVar(frame_group_header, value=ticket_number)
+    combo_ticket_number = Entry(frame_group_header, width=20, textvariable = combo_ticket_number_value)
+    combo_ticket_number.grid(column=1, row=group_row_count, sticky = W)
+    '''
+    combo_ticket_number = ttk.Combobox(frame_group_header, state="readonly")
+    combo_ticket_number['values']= ("1","2","3","4","5","6","7","8","9","10")
+    #combo_ticket_number.current(0)
+    combo_ticket_number.set(ticket_number)
+    combo_ticket_number.grid(column=1, row=group_row_count, sticky = W)
 
     frame_group_header.grid(column=0, row=row_count, sticky = W, padx=UI_PADDING_X)
 
@@ -839,6 +875,5 @@ def main():
     root.mainloop()
 
     
-
 if __name__ == "__main__":
     main()
