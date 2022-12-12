@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 #encoding=utf-8
-
+# 'seleniumwire' and 'selenium 4' raise error when running python 2.x
+# PS: python 2.x will be removed in future.
 try:
     # for Python2
     from Tkinter import *
@@ -11,13 +12,14 @@ except ImportError:
     from tkinter import *
     from tkinter import ttk
     from tkinter import messagebox
-
 import os
 import sys
 import platform
 import json
+import webbrowser
+import pyperclip
 
-CONST_APP_VERSION = u"MaxBot (2022.03.24)"
+CONST_APP_VERSION = u"MaxBot (2022.11.24)"
 
 CONST_FROM_TOP_TO_BOTTOM = u"from top to bottom"
 CONST_FROM_BOTTOM_TO_TOP = u"from bottom to top"
@@ -25,16 +27,220 @@ CONST_RANDOM = u"random"
 CONST_SELECT_ORDER_DEFAULT = CONST_FROM_TOP_TO_BOTTOM
 CONST_SELECT_OPTIONS_DEFAULT = (CONST_FROM_TOP_TO_BOTTOM, CONST_FROM_BOTTOM_TO_TOP, CONST_RANDOM)
 CONST_SELECT_OPTIONS_ARRAY = [CONST_FROM_TOP_TO_BOTTOM, CONST_FROM_BOTTOM_TO_TOP, CONST_RANDOM]
+CONST_ADBLOCK_PLUS_ADVANCED_FILTER_DEFAULT = '''tixcraft.com###topAlert
+tixcraft.com##.col-md-7.col-xs-12.mg-top
+tixcraft.com##.topBar.alert-box.emergency
+tixcraft.com##.footer.clearfix
+tixcraft.com##.row.process-wizard.process-wizard-info
+tixcraft.com##.nav-line
+tixcraft.com##.page-info.row.line-btm.mg-0'''
+CONST_CAPTCHA_SOUND_FILENAME_DEFAULT = "ding-dong.wav"
+CONST_HOMEPAGE_DEFAULT = "https://tixcraft.com"
 
-config_filepath = None
-config_dict = None
+translate={}
 
-window = None
+URL_DONATE = 'https://max-everyday.com/about/#donate'
+URL_HELP = 'https://max-everyday.com/2018/03/tixcraft-bot/'
+URL_RELEASE = 'https://github.com/max32002/tixcraft_bot/releases'
+URL_FB = 'https://www.facebook.com/maxbot.ticket'
 
-btn_save = None
-btn_exit = None
+def load_translate():
+    translate = {}
+    en_us={}
+    en_us["homepage"] = 'Homepage'
+    en_us["browser"] = 'Browser'
+    en_us["language"] = 'Language'
+    en_us["ticket_number"] = 'Ticker Number'
+    en_us["enable"] = 'Enable'
+    en_us["auto_press_next_step_button"] = 'Auto Press Next Step Button'
+    en_us["auto_fill_ticket_number"] = 'Auto Fill Ticket Number'
+    en_us["area_select_order"] = 'Area select order'
+    en_us["area_keyword"] = 'Area Keyword'
+    en_us["and"] = 'And with'
+    en_us["auto_guess_options"] = 'Guess Options in Question'
 
-def load_json():
+    en_us["date_auto_select"] = 'Date Auto Select'
+    en_us["date_select_order"] = 'Date select order'
+    en_us["date_keyword"] = 'Date Keyword'
+    en_us["area_auto_select"] = 'Area Auto Select'
+    #en_us["area_select_order"] = 'Area select order'
+    en_us["area_keyword_1"] = 'Area Keyword #1'
+    en_us["area_keyword_2"] = 'Area Keyword #2'
+    en_us["area_keyword_3"] = 'Area Keyword #3'
+    en_us["area_keyword_4"] = 'Area Keyword #4'
+    en_us["pass_1_seat_remaining"] = 'Pass 1 seat remaining'
+    en_us["pass_date_is_sold_out"] = 'Pass date is sold out'
+    en_us["auto_reload_coming_soon_page"] = 'Reload coming soon page'
+
+    en_us["preference"] = 'Preference'
+    en_us["advanced"] = 'Advanced'
+    en_us["about"] = 'About'
+
+    en_us["run"] = 'Run'
+    en_us["save"] = 'Save'
+    en_us["exit"] = 'Close'
+    en_us["copy"] = 'Copy'
+
+    en_us["facebook_account"] = 'Facebook account'
+    en_us["play_captcha_sound"] = 'Play sound when captcha'
+    en_us["captcha_sound_filename"] = 'captcha sound filename'
+    en_us["adblock_plus_enable"] = 'Adblock Plus Extension'
+    en_us["adblock_plus_memo"] = 'Default adblock is disable'
+    en_us["adblock_plus_settings"] = "Adblock Advanced Filter"
+
+    en_us["maxbot_slogan"] = 'MaxBot is a FREE and open source bot program. Wish you good luck.'
+    en_us["donate"] = 'Donate'
+    en_us["help"] = 'Help'
+    en_us["release"] = 'Release'
+
+    zh_tw={}
+    zh_tw["homepage"] = '售票網站'
+    zh_tw["browser"] = '瀏覽器'
+    zh_tw["language"] = '語言'
+    zh_tw["ticket_number"] = '門票張數'
+    zh_tw["enable"] = '啟用'
+    zh_tw["auto_press_next_step_button"] = '自動點選下一步按鈕'
+    zh_tw["auto_fill_ticket_number"] = '自動輸入張數'
+    zh_tw["area_select_order"] = '區域排序方式'
+    zh_tw["area_keyword"] = '區域關鍵字'
+    zh_tw["and"] = '而且（同列）'
+    zh_tw["auto_guess_options"] = '自動猜測驗證問題'
+
+    zh_tw["date_auto_select"] = '日期自動點選'
+    zh_tw["date_select_order"] = '日期排序方式'
+    zh_tw["date_keyword"] = '日期關鍵字'
+    zh_tw["area_auto_select"] = '區域自動點選'
+    #zh_tw["area_select_order"] = '區域排序方式'
+    zh_tw["area_keyword_1"] = '區域關鍵字 #1'
+    zh_tw["area_keyword_2"] = '區域關鍵字 #2'
+    zh_tw["area_keyword_3"] = '區域關鍵字 #3'
+    zh_tw["area_keyword_4"] = '區域關鍵字 #4'
+    zh_tw["pass_1_seat_remaining"] = '避開「剩餘 1」的區域'
+    zh_tw["pass_date_is_sold_out"] = '避開「搶購一空」的場次'
+    zh_tw["auto_reload_coming_soon_page"] = '自動刷新倒數中的活動頁面'
+
+    zh_tw["preference"] = '偏好設定'
+    zh_tw["advanced"] = '進階設定'
+    zh_tw["about"] = '關於'
+
+    zh_tw["run"] = '搶票'
+    zh_tw["save"] = '存檔'
+    zh_tw["exit"] = '關閉'
+    zh_tw["copy"] = '複製'
+
+    zh_tw["facebook_account"] = 'Facebook 帳號'
+    zh_tw["play_captcha_sound"] = '輸入驗證碼時播放音效'
+    zh_tw["captcha_sound_filename"] = '驗證碼用音效檔'
+    zh_tw["adblock_plus_enable"] = 'Adblock 瀏覽器擴充功能'
+    zh_tw["adblock_plus_memo"] = 'Adblock 功能預設關閉'
+    zh_tw["adblock_plus_settings"] = "Adblock 進階過濾規則"
+
+    zh_tw["maxbot_slogan"] = 'MaxBot是一個免費、開放原始碼的搶票機器人。\n祝您搶票成功。'
+    zh_tw["donate"] = '打賞'
+    zh_tw["release"] = '所有可用版本'
+    zh_tw["help"] = '使用教學'
+
+    zh_cn={}
+    zh_cn["homepage"] = '售票网站'
+    zh_cn["browser"] = '浏览器'
+    zh_cn["language"] = '语言'
+    zh_cn["ticket_number"] = '门票张数'
+    zh_cn["enable"] = '启用'
+    zh_cn["auto_press_next_step_button"] = '自动点选下一步按钮'
+    zh_cn["auto_fill_ticket_number"] = '自动输入张数'
+    zh_cn["area_select_order"] = '区域排序方式'
+    zh_cn["area_keyword"] = '区域关键字'
+    zh_cn["and"] = '而且（同列）'
+    zh_cn["auto_guess_options"] = '自动猜测验证问题'
+
+    zh_cn["date_auto_select"] = '日期自动点选'
+    zh_cn["date_select_order"] = '日期排序方式'
+    zh_cn["date_keyword"] = '日期关键字'
+    zh_cn["area_auto_select"] = '区域自动点选'
+    #zh_cn["area_select_order"] = '区域排序方式'
+    zh_cn["area_keyword_1"] = '区域关键字 #1'
+    zh_cn["area_keyword_2"] = '区域关键字 #2'
+    zh_cn["area_keyword_3"] = '区域关键字 #3'
+    zh_cn["area_keyword_4"] = '区域关键字 #4'
+    zh_cn["pass_1_seat_remaining"] = '避开“剩余 1”的区域'
+    zh_cn["pass_date_is_sold_out"] = '避开“抢购一空”的场次'
+    zh_cn["auto_reload_coming_soon_page"] = '自动刷新倒数中的活动页面'
+
+    zh_cn["preference"] = '偏好设定'
+    zh_cn["advanced"] = '進階設定'
+    zh_cn["about"] = '关于'
+    zh_cn["copy"] = '复制'
+
+    zh_cn["run"] = '抢票'
+    zh_cn["save"] = '存档'
+    zh_cn["exit"] = '关闭'
+
+    zh_cn["facebook_account"] = 'Facebook 帐号'
+    zh_cn["play_captcha_sound"] = '输入验证码时播放音效'
+    zh_cn["captcha_sound_filename"] = '验证码用音效档'
+    zh_cn["adblock_plus_enable"] = 'Adblock 浏览器扩充功能'
+    zh_cn["adblock_plus_memo"] = 'Adblock 功能预设关闭'
+    zh_cn["adblock_plus_settings"] = "Adblock 进阶过滤规则"
+
+    zh_cn["maxbot_slogan"] = 'MaxBot 是一个免费的开源机器人程序。\n祝您抢票成功。'
+    zh_cn["donate"] = '打赏'
+    zh_cn["help"] = '使用教学'
+    zh_cn["release"] = '所有可用版本'
+
+    ja_jp={}
+    ja_jp["homepage"] = 'ホームページ'
+    ja_jp["browser"] = 'ブラウザ'
+    ja_jp["language"] = '言語'
+    ja_jp["ticket_number"] = '枚数'
+    ja_jp["enable"] = '有効'
+    ja_jp["auto_press_next_step_button"] = '次を自動で押す'
+    ja_jp["auto_fill_ticket_number"] = '枚数自動入力'
+    ja_jp["area_select_order"] = 'エリアソート方法'
+    ja_jp["area_keyword"] = 'エリアキーワード'
+    ja_jp["and"] = 'そして（同列）'
+    ja_jp["auto_guess_options"] = '自動推測検証問題'
+
+    ja_jp["date_auto_select"] = '日付自動選択'
+    ja_jp["date_select_order"] = '日付のソート方法'
+    ja_jp["date_keyword"] = '日付キーワード'
+    ja_jp["area_auto_select"] = 'エリア自動選択'
+    #ja_jp["area_select_order"] = 'エリアソート方法'
+    ja_jp["area_keyword_1"] = 'エリアキーワード #1'
+    ja_jp["area_keyword_2"] = 'エリアキーワード #2'
+    ja_jp["area_keyword_3"] = 'エリアキーワード #3'
+    ja_jp["area_keyword_4"] = 'エリアキーワード #4'
+    ja_jp["pass_1_seat_remaining"] = '「1 席残り」エリアは避ける'
+    ja_jp["pass_date_is_sold_out"] = '「売り切れ」公演を避ける'
+    ja_jp["auto_reload_coming_soon_page"] = '公開予定のページをリロード'
+
+    ja_jp["preference"] = '設定'
+    ja_jp["advanced"] = '高度な設定'
+    ja_jp["about"] = '情報'
+
+    ja_jp["run"] = 'チケットを取る'
+    ja_jp["save"] = '保存'
+    ja_jp["exit"] = '閉じる'
+    ja_jp["copy"] = 'コピー'
+
+    ja_jp["facebook_account"] = 'Facebookのアカウント'
+    ja_jp["play_captcha_sound"] = 'キャプチャ時に音を鳴らす'
+    ja_jp["captcha_sound_filename"] = 'サウンドファイル名'
+
+    ja_jp["adblock_plus_enable"] = 'Adblock 拡張機能'
+    ja_jp["adblock_plus_memo"] = 'Adblock デフォルトは無効です'
+    ja_jp["adblock_plus_settings"] = "Adblock 高度なフィルター"
+    ja_jp["maxbot_slogan"] = 'MaxBot は無料のオープン ソース ボット プログラムです。チケットの成功をお祈りします。'
+    ja_jp["donate"] = '寄付'
+    ja_jp["help"] = '利用方法'
+    ja_jp["release"] = 'リリース'
+
+    translate['en_us']=en_us
+    translate['zh_tw']=zh_tw
+    translate['zh_cn']=zh_cn
+    translate['ja_jp']=ja_jp
+    return translate
+
+def get_app_root():
     # 讀取檔案裡的參數值
     basis = ""
     if hasattr(sys, 'frozen'):
@@ -42,123 +248,204 @@ def load_json():
     else:
         basis = sys.argv[0]
     app_root = os.path.dirname(basis)
+    return app_root
 
-    global config_filepath
+def get_default_config():
+    config_dict={}
+
+    config_dict["homepage"] = CONST_HOMEPAGE_DEFAULT
+    config_dict["browser"] = "chrome"
+    config_dict["language"] = "English"
+    config_dict["ticket_number"] = 2
+    config_dict["pass_1_seat_remaining"] = True
+
+    config_dict['kktix']={}
+    config_dict["kktix"]["auto_press_next_step_button"] = True
+    config_dict["kktix"]["auto_fill_ticket_number"] = True
+    config_dict["kktix"]["area_mode"] = CONST_SELECT_ORDER_DEFAULT
+    config_dict["kktix"]["area_keyword_1"] = ""
+    config_dict["kktix"]["area_keyword_1_and"] = ""
+    config_dict["kktix"]["area_keyword_2"] = ""
+    config_dict["kktix"]["area_keyword_2_and"] = ""
+    config_dict["kktix"]["auto_guess_options"] = True
+
+    config_dict['tixcraft']={}
+    config_dict["tixcraft"]["date_auto_select"] = {}
+    config_dict["tixcraft"]["date_auto_select"]["enable"] = True
+    config_dict["tixcraft"]["date_auto_select"]["date_keyword"] = ""
+    config_dict["tixcraft"]["area_auto_select"] = {}
+    config_dict["tixcraft"]["area_auto_select"]["enable"] = True
+    config_dict["tixcraft"]["area_auto_select"]["area_keyword_1"] = ""
+    config_dict["tixcraft"]["area_auto_select"]["area_keyword_2"] = ""
+    config_dict["tixcraft"]["area_auto_select"]["area_keyword_3"] = ""
+    config_dict["tixcraft"]["area_auto_select"]["area_keyword_4"] = ""
+
+    config_dict["tixcraft"]["date_auto_select"]["mode"] = CONST_SELECT_ORDER_DEFAULT
+    config_dict["tixcraft"]["area_auto_select"]["mode"] = CONST_SELECT_ORDER_DEFAULT
+
+    config_dict["tixcraft"]["pass_date_is_sold_out"] = False
+    config_dict["tixcraft"]["auto_reload_coming_soon_page"] = True
+
+    config_dict['advanced']={}
+
+    config_dict['advanced']['play_captcha_sound']={}
+    config_dict["advanced"]["play_captcha_sound"]["enable"] = True
+    config_dict["advanced"]["play_captcha_sound"]["filename"] = CONST_CAPTCHA_SOUND_FILENAME_DEFAULT
+
+    config_dict["advanced"]["facebook_account"] = ""
+    config_dict["advanced"]["adblock_plus_enable"] = False
+
+    config_dict['debug']=False
+
+    return config_dict
+
+def load_json():
+    app_root = get_app_root()
+
+    # overwrite config path.
     config_filepath = os.path.join(app_root, 'settings.json')
 
-    global config_dict
     config_dict = None
     if os.path.isfile(config_filepath):
         with open(config_filepath) as json_data:
             config_dict = json.load(json_data)
+    else:
+        config_dict = get_default_config()
+    return config_filepath, config_dict
 
 def btn_save_clicked():
     btn_save_act()
 
 def btn_save_act(slience_mode=False):
+    app_root = get_app_root()
+    config_filepath = os.path.join(app_root, 'settings.json')
+
+    config_dict = get_default_config()
+
+    # read user input
+    global combo_homepage
+    global combo_browser
+    global combo_language
+    global combo_ticket_number
+    global chk_state_pass_1_seat_remaining
+
+    global chk_state_auto_press_next_step_button
+    global chk_state_auto_fill_ticket_number
+    global txt_kktix_area_keyword_1
+    global txt_kktix_area_keyword_1_and
+    global txt_kktix_area_keyword_2
+    global txt_kktix_area_keyword_2_and
+    # disable password brute force attack
+    global txt_kktix_answer_dictionary
+
+    global chk_state_auto_guess_options
+
+    global chk_state_date_auto_select
+    global txt_date_keyword
+    global chk_state_area_auto_select
+    global txt_area_keyword_1
+    global txt_area_keyword_2
+    global txt_area_keyword_3
+    global txt_area_keyword_4
+
+    global combo_date_auto_select_mode
+    global combo_area_auto_select_mode
+
+    global chk_state_pass_date_is_sold_out
+    global chk_state_auto_reload_coming_soon_page
+
+    global txt_facebook_account
+    global chk_state_play_captcha_sound
+    global txt_captcha_sound_filename
+    global chk_state_adblock_plus
 
     is_all_data_correct = True
 
-    global config_filepath
+    if is_all_data_correct:
+        if combo_homepage.get().strip()=="":
+            is_all_data_correct = False
+            messagebox.showerror("Error", "Please enter homepage")
+        else:
+            config_dict["homepage"] = combo_homepage.get().strip()
 
-    global config_dict
-    if not config_dict is None:
-        # read user input
+    if is_all_data_correct:
+        if combo_browser.get().strip()=="":
+            is_all_data_correct = False
+            messagebox.showerror("Error", "Please select a browser: chrome or firefox")
+        else:
+            config_dict["browser"] = combo_browser.get().strip()
 
-        global combo_homepage
-        global combo_browser
-        global combo_ticket_number
-        #global txt_facebook_account
-    
-        global chk_state_auto_press_next_step_button
-        global chk_state_auto_fill_ticket_number
-        global txt_kktix_area_keyword
+    if is_all_data_correct:
+        if combo_language.get().strip()=="":
+            is_all_data_correct = False
+            messagebox.showerror("Error", "Please select a language")
+        else:
+            config_dict["language"] = combo_language.get().strip()
+
+    if is_all_data_correct:
+        if combo_ticket_number.get().strip()=="":
+            is_all_data_correct = False
+            messagebox.showerror("Error", "Please select a value")
+        else:
+            config_dict["ticket_number"] = int(combo_ticket_number.get().strip())
+
+    if is_all_data_correct:
+        config_dict["pass_1_seat_remaining"] = bool(chk_state_pass_1_seat_remaining.get())
+
+        config_dict["kktix"]["auto_press_next_step_button"] = bool(chk_state_auto_press_next_step_button.get())
+        config_dict["kktix"]["auto_fill_ticket_number"] = bool(chk_state_auto_fill_ticket_number.get())
+        config_dict["kktix"]["area_mode"] = combo_kktix_area_mode.get().strip()
+        config_dict["kktix"]["area_keyword_1"] = txt_kktix_area_keyword_1.get().strip()
+        config_dict["kktix"]["area_keyword_1_and"] = txt_kktix_area_keyword_1_and.get().strip()
+        config_dict["kktix"]["area_keyword_2"] = txt_kktix_area_keyword_2.get().strip()
+        config_dict["kktix"]["area_keyword_2_and"] = txt_kktix_area_keyword_2_and.get().strip()
         # disable password brute force attack
-        global txt_kktix_answer_dictionary
-        
-        global chk_state_auto_guess_options
+        #config_dict["kktix"]["answer_dictionary"] = txt_kktix_answer_dictionary.get().strip()
+        config_dict["kktix"]["auto_guess_options"] = bool(chk_state_auto_guess_options.get())
 
-        global chk_state_date_auto_select
-        global txt_date_keyword
-        global chk_state_area_auto_select
-        global txt_area_keyword_1
-        global txt_area_keyword_2
+        config_dict["tixcraft"]["date_auto_select"]["enable"] = bool(chk_state_date_auto_select.get())
+        config_dict["tixcraft"]["date_auto_select"]["date_keyword"] = txt_date_keyword.get().strip()
 
-        global combo_date_auto_select_mode
-        global combo_area_auto_select_mode
+        config_dict["tixcraft"]["area_auto_select"]["enable"] = bool(chk_state_area_auto_select.get())
+        config_dict["tixcraft"]["area_auto_select"]["area_keyword_1"] = txt_area_keyword_1.get().strip()
+        config_dict["tixcraft"]["area_auto_select"]["area_keyword_2"] = txt_area_keyword_2.get().strip()
+        config_dict["tixcraft"]["area_auto_select"]["area_keyword_3"] = txt_area_keyword_3.get().strip()
+        config_dict["tixcraft"]["area_auto_select"]["area_keyword_4"] = txt_area_keyword_4.get().strip()
 
-        global chk_state_pass_1_seat_remaining
+        config_dict["tixcraft"]["date_auto_select"]["mode"] = combo_date_auto_select_mode.get().strip()
+        config_dict["tixcraft"]["area_auto_select"]["mode"] = combo_area_auto_select_mode.get().strip()
 
-        global chk_state_pass_date_is_sold_out
+        config_dict["tixcraft"]["pass_date_is_sold_out"] = bool(chk_state_pass_date_is_sold_out.get())
+        config_dict["tixcraft"]["auto_reload_coming_soon_page"] = bool(chk_state_auto_reload_coming_soon_page.get())
 
-        global chk_state_auto_reload_coming_soon_page
+        config_dict["advanced"]["play_captcha_sound"]["enable"] = bool(chk_state_play_captcha_sound.get())
+        config_dict["advanced"]["play_captcha_sound"]["filename"] = txt_captcha_sound_filename.get().strip()
 
-        if is_all_data_correct:
-            if combo_homepage.get().strip()=="":
-                is_all_data_correct = False
-                messagebox.showerror("Error", "Please enter homepage")
-            else:
-                config_dict["homepage"] = combo_homepage.get().strip()
+        config_dict["advanced"]["facebook_account"] = txt_facebook_account.get().strip()
+        config_dict["advanced"]["adblock_plus_enable"] = bool(chk_state_adblock_plus.get())
 
-        if is_all_data_correct:
-            if combo_browser.get().strip()=="":
-                is_all_data_correct = False
-                messagebox.showerror("Error", "Please enter browser: chrome or firefox")
-            else:
-                config_dict["browser"] = combo_browser.get().strip()
 
-        if is_all_data_correct:
-            if combo_ticket_number.get().strip()=="":
-                is_all_data_correct = False
-                messagebox.showerror("Error", "Please select a value")
-            else:
-                config_dict["ticket_number"] = int(combo_ticket_number.get().strip())
+    # save config.
+    if is_all_data_correct:
+        import json
+        with open(config_filepath, 'w') as outfile:
+            json.dump(config_dict, outfile)
 
-        if is_all_data_correct:
-            #config_dict["facebook_account"] = txt_facebook_account.get().strip()
-            pass
-
-        if is_all_data_correct:
-            config_dict["kktix"]["auto_press_next_step_button"] = bool(chk_state_auto_press_next_step_button.get())
-            config_dict["kktix"]["auto_fill_ticket_number"] = bool(chk_state_auto_fill_ticket_number.get())
-            config_dict["kktix"]["area_mode"] = combo_kktix_area_mode.get().strip()
-            config_dict["kktix"]["area_keyword"] = txt_kktix_area_keyword.get().strip()
-            # disable password brute force attack
-            #config_dict["kktix"]["answer_dictionary"] = txt_kktix_answer_dictionary.get().strip()
-            config_dict["kktix"]["auto_guess_options"] = bool(chk_state_auto_guess_options.get())
-
-            config_dict["tixcraft"]["date_auto_select"]["enable"] = bool(chk_state_date_auto_select.get())
-            config_dict["tixcraft"]["date_auto_select"]["date_keyword"] = txt_date_keyword.get().strip()
-
-            config_dict["tixcraft"]["area_auto_select"]["enable"] = bool(chk_state_area_auto_select.get())
-            config_dict["tixcraft"]["area_auto_select"]["area_keyword_1"] = txt_area_keyword_1.get().strip()
-            config_dict["tixcraft"]["area_auto_select"]["area_keyword_2"] = txt_area_keyword_2.get().strip()
-
-            config_dict["tixcraft"]["date_auto_select"]["mode"] = combo_date_auto_select_mode.get().strip()
-            config_dict["tixcraft"]["area_auto_select"]["mode"] = combo_area_auto_select_mode.get().strip()
-
-            config_dict["tixcraft"]["pass_1_seat_remaining"] = bool(chk_state_pass_1_seat_remaining.get())
-            config_dict["tixcraft"]["pass_date_is_sold_out"] = bool(chk_state_pass_date_is_sold_out.get())
-            config_dict["tixcraft"]["auto_reload_coming_soon_page"] = bool(chk_state_auto_reload_coming_soon_page.get())
-
-        # save config.
-        if is_all_data_correct:
-            import json
-            with open(config_filepath, 'w') as outfile:
-                json.dump(config_dict, outfile)
-
-            if slience_mode==False:
-                messagebox.showinfo("File Save", "Done ^_^")
+        if slience_mode==False:
+            messagebox.showinfo("File Save", "Done ^_^")
 
     return is_all_data_correct
 
 def btn_run_clicked():
+    import subprocess
+
+    print('run button pressed.')
     Root_Dir = ""
-    if btn_save_act(slience_mode=True):
-        import subprocess
+    save_ret = btn_save_act(slience_mode=True)
+    print("save config result:", save_ret)
+    if save_ret:
         if hasattr(sys, 'frozen'):
             print("execute in frozen mode")
-            import platform
 
             # check platform here.
             if platform.system() == 'Darwin':
@@ -171,25 +458,216 @@ def btn_run_clicked():
                 print("execute .exe binary.")
                 subprocess.Popen("chrome_tixcraft.exe", shell=True)
         else:
-            #print("execute in shell mode")
+            interpreter_binary = 'python'
+            interpreter_binary_alt = 'python3'
+            if platform.system() == 'Darwin':
+                # try python3 before python.
+                interpreter_binary = 'python3'
+                interpreter_binary_alt = 'python'
+            print("execute in shell mode.")
             working_dir = os.path.dirname(os.path.realpath(__file__))
             #print("script path:", working_dir)
             #messagebox.showinfo(title="Debug0", message=working_dir)
+
+            # some python3 binary, running in 'python' command.
             try:
-                s=subprocess.Popen(['python3', 'chrome_tixcraft.py'], cwd=working_dir)
+                print('try', interpreter_binary)
+                s=subprocess.Popen([interpreter_binary, 'chrome_tixcraft.py'], cwd=working_dir)
                 #s=subprocess.Popen(['./chrome_tixcraft'], stdout=subprocess.PIPE, stderr=subprocess.PIPE, cwd=working_dir)
                 #s=subprocess.run(['python3', 'chrome_tixcraft.py'], cwd=working_dir)
                 #messagebox.showinfo(title="Debug1", message=str(s))
             except Exception as exc:
+                print('try', interpreter_binary_alt)
                 try:
-                    s=subprocess.Popen(['python', 'chrome_tixcraft.py'], cwd=working_dir)
+                    s=subprocess.Popen([interpreter_binary_alt, 'chrome_tixcraft.py'], cwd=working_dir)
                 except Exception as exc:
                     msg=str(exc)
-                    messagebox.showinfo(title="Debug2", message=msg)
+                    print("exeption:", msg)
+                    #messagebox.showinfo(title="Debug2", message=msg)
                     pass
+
+def btn_preview_sound_clicked():
+    global txt_captcha_sound_filename
+    new_sound_filename = txt_captcha_sound_filename.get().strip()
+    #print("new_sound_filename:", new_sound_filename)
+    app_root = get_app_root()
+    new_sound_filename = os.path.join(app_root, new_sound_filename)
+    play_mp3_async(new_sound_filename)
+
+def play_mp3_async(sound_filename):
+    import threading
+    threading.Thread(target=play_mp3, args=(sound_filename,), daemon=True).start()
+
+def play_mp3(sound_filename):
+    from playsound import playsound
+    try:
+        playsound(sound_filename)
+    except Exception as exc:
+        msg=str(exc)
+        print("play sound exeption:", msg)
+        if platform.system() == 'Windows':
+            import winsound
+            try:
+                winsound.PlaySound(sound_filename, winsound.SND_FILENAME)
+            except Exception as exc2:
+                pass
+
+def open_url(url):
+    webbrowser.open_new(url)
 
 def btn_exit_clicked():
     root.destroy()
+
+def btn_donate_clicked():
+    open_url.open(URL_DONATE)
+
+def btn_help_clicked():
+    open_url.open(URL_HELP)
+
+def btn_copy_clicked():
+    pyperclip.copy(CONST_ADBLOCK_PLUS_ADVANCED_FILTER_DEFAULT)
+
+def callbackTicketNumberOnChange(event):
+    showHidePass1SeatRemaining()
+
+def callbackLanguageOnChange(event):
+    applyNewLanguage()
+
+def get_language_code_by_name(new_language):
+    language_code = "en_us"
+    if u'繁體中文' in new_language:
+        language_code = 'zh_tw'
+    if u'簡体中文' in new_language:
+        language_code = 'zh_cn'
+    if u'日本語' in new_language:
+        language_code = 'ja_jp'
+    #print("new language code:", language_code)
+
+    return language_code
+
+def applyNewLanguage():
+    global combo_language
+    new_language = combo_language.get().strip()
+    #print("new language value:", new_language)
+
+    language_code=get_language_code_by_name(new_language)
+
+    global lbl_homepage
+    global lbl_browser
+    global lbl_language
+    global lbl_ticket_number
+    global lbl_pass_1_seat_remaining
+
+    # for kktix
+    global lbl_auto_press_next_step_button
+    global lbl_auto_fill_ticket_number
+    global lbl_kktix_area_mode
+    global lbl_kktix_area_keyword_1
+    global lbl_kktix_area_keyword_1_and_text
+    global lbl_kktix_area_keyword_2
+    global lbl_kktix_area_keyword_2_and_text
+    global lbl_auto_guess_options
+
+    # for tixcraft
+    global lbl_date_auto_select
+    global lbl_date_auto_select_mode
+    global lbl_date_keyword
+    global lbl_area_auto_select
+    global lbl_area_auto_select_mode
+    global lbl_area_keyword_1
+    global lbl_area_keyword_2
+    global lbl_area_keyword_3
+    global lbl_area_keyword_4
+    global lbl_pass_date_is_sold_out
+    global lbl_auto_reload_coming_soon_page
+
+    # for checkbox
+    global chk_pass_1_seat_remaining
+
+    global chk_auto_press_next_step_button
+    global chk_auto_fill_ticket_number
+    global chk_auto_guess_options
+    global chk_date_auto_select
+    global chk_area_auto_select
+    global chk_pass_date_is_sold_out
+    global chk_auto_reload_coming_soon_page
+    global chk_play_captcha_sound
+    global chk_adblock_plus
+
+    global tabControl
+
+    global lbl_slogan
+    global lbl_help
+    global lbl_donate
+    global lbl_release
+
+    global lbl_adblock_plus
+    global lbl_adblock_plus_memo
+    global lbl_adblock_plus_settings
+
+    lbl_homepage.config(text=translate[language_code]["homepage"])
+    lbl_browser.config(text=translate[language_code]["browser"])
+    lbl_language.config(text=translate[language_code]["language"])
+    lbl_ticket_number.config(text=translate[language_code]["ticket_number"])
+    lbl_pass_1_seat_remaining.config(text=translate[language_code]["pass_1_seat_remaining"])
+
+    lbl_auto_press_next_step_button.config(text=translate[language_code]["auto_press_next_step_button"])
+    lbl_auto_fill_ticket_number.config(text=translate[language_code]["auto_fill_ticket_number"])
+    lbl_kktix_area_mode.config(text=translate[language_code]["area_select_order"])
+    lbl_kktix_area_keyword_1.config(text=translate[language_code]["area_keyword_1"])
+    lbl_kktix_area_keyword_1_and_text.config(text=translate[language_code]["and"])
+    lbl_kktix_area_keyword_2.config(text=translate[language_code]["area_keyword_2"])
+    lbl_kktix_area_keyword_2_and_text.config(text=translate[language_code]["and"])
+    lbl_auto_guess_options.config(text=translate[language_code]["auto_guess_options"])
+    lbl_date_auto_select.config(text=translate[language_code]["date_auto_select"])
+    lbl_date_auto_select_mode.config(text=translate[language_code]["date_select_order"])
+    lbl_date_keyword.config(text=translate[language_code]["date_keyword"])
+    lbl_area_auto_select.config(text=translate[language_code]["area_auto_select"])
+    lbl_area_auto_select_mode.config(text=translate[language_code]["area_select_order"])
+    lbl_area_keyword_1.config(text=translate[language_code]["area_keyword_1"])
+    lbl_area_keyword_2.config(text=translate[language_code]["area_keyword_2"])
+    lbl_area_keyword_3.config(text=translate[language_code]["area_keyword_3"])
+    lbl_area_keyword_4.config(text=translate[language_code]["area_keyword_4"])
+    lbl_pass_date_is_sold_out.config(text=translate[language_code]["pass_date_is_sold_out"])
+    lbl_auto_reload_coming_soon_page.config(text=translate[language_code]["auto_reload_coming_soon_page"])
+
+    chk_pass_1_seat_remaining.config(text=translate[language_code]["enable"])
+    chk_auto_press_next_step_button.config(text=translate[language_code]["enable"])
+    chk_auto_fill_ticket_number.config(text=translate[language_code]["enable"])
+    chk_auto_guess_options.config(text=translate[language_code]["enable"])
+    chk_date_auto_select.config(text=translate[language_code]["enable"])
+    chk_area_auto_select.config(text=translate[language_code]["enable"])
+    chk_pass_date_is_sold_out.config(text=translate[language_code]["enable"])
+    chk_auto_reload_coming_soon_page.config(text=translate[language_code]["enable"])
+    chk_play_captcha_sound.config(text=translate[language_code]["enable"])
+    chk_adblock_plus.config(text=translate[language_code]["enable"])
+
+    tabControl.tab(0, text=translate[language_code]["preference"])
+    tabControl.tab(1, text=translate[language_code]["advanced"])
+    tabControl.tab(2, text=translate[language_code]["about"])
+
+    global lbl_facebook_account
+    global lbl_play_captcha_sound
+    global lbl_captcha_sound_filename
+    lbl_facebook_account.config(text=translate[language_code]["facebook_account"])
+    lbl_play_captcha_sound.config(text=translate[language_code]["play_captcha_sound"])
+    lbl_captcha_sound_filename.config(text=translate[language_code]["captcha_sound_filename"])
+
+    lbl_slogan.config(text=translate[language_code]["maxbot_slogan"])
+    lbl_help.config(text=translate[language_code]["help"])
+    lbl_donate.config(text=translate[language_code]["donate"])
+    lbl_release.config(text=translate[language_code]["release"])
+
+    lbl_adblock_plus.config(text=translate[language_code]["adblock_plus_enable"])
+    lbl_adblock_plus_memo.config(text=translate[language_code]["adblock_plus_memo"])
+    lbl_adblock_plus_settings.config(text=translate[language_code]["adblock_plus_settings"])
+
+    global btn_run
+    global btn_save
+    global btn_exit
+    btn_run.config(text=translate[language_code]["run"])
+    btn_save.config(text=translate[language_code]["save"])
+    btn_exit.config(text=translate[language_code]["exit"])
 
 def callbackHomepageOnChange(event):
     showHideBlocks()
@@ -214,6 +692,7 @@ def showHideBlocks(all_layout_visible=False):
     #global txt_kktix_answer_dictionary
     #global txt_kktix_answer_dictionary_index
 
+    global combo_homepage
     global combo_kktix_area_mode
     global combo_kktix_area_mode_index
 
@@ -261,18 +740,25 @@ def showHideBlocks(all_layout_visible=False):
             frame_group_tixcraft.grid(column=0, row=frame_group_tixcraft_index, padx=UI_PADDING_X)
             frame_group_kktix.grid_forget()
 
-    lbl_kktix_area_mode_default = 'Area select order'
-    #lbl_kktix_answer_default = 'Answer Dictionary'
-    if u'kktix' in new_homepage:
-        lbl_kktix_area_mode['text'] = lbl_kktix_area_mode_default
-        # disable password brute force attack
-        #lbl_kktix_answer_dictionary['text'] = lbl_kktix_answer_default
-    else:
-        lbl_kktix_area_mode['text'] = ''
-        # disable password brute force attack
-        #lbl_kktix_answer_dictionary['text'] = ''
-
     showHideTixcraftBlocks()
+    showHidePass1SeatRemaining()
+
+def showHidePass1SeatRemaining():
+    global combo_ticket_number
+    ticket_number_int = int(combo_ticket_number.get().strip())
+
+    global pass_1_seat_remaining_index
+    global lbl_pass_1_seat_remaining
+    global chk_pass_1_seat_remaining
+
+    if ticket_number_int > 1:
+        # show.
+        lbl_pass_1_seat_remaining.grid(column=0, row=pass_1_seat_remaining_index, sticky = E)
+        chk_pass_1_seat_remaining.grid(column=1, row=pass_1_seat_remaining_index, sticky = W)
+    else:
+        # hide
+        lbl_pass_1_seat_remaining.grid_forget()
+        chk_pass_1_seat_remaining.grid_forget()
 
 # purpose: show detail blocks if master field is enable.
 def showHideTixcraftBlocks():
@@ -297,10 +783,18 @@ def showHideTixcraftBlocks():
 
     global area_keyword_1_index
     global area_keyword_2_index
+    global area_keyword_3_index
+    global area_keyword_4_index
+
     global lbl_area_keyword_1
     global lbl_area_keyword_2
+    global lbl_area_keyword_3
+    global lbl_area_keyword_4
+
     global txt_area_keyword_1
     global txt_area_keyword_2
+    global txt_area_keyword_3
+    global txt_area_keyword_4
 
     is_date_set_to_enable = bool(chk_state_date_auto_select.get())
     is_area_set_to_enable = bool(chk_state_area_auto_select.get())
@@ -332,6 +826,12 @@ def showHideTixcraftBlocks():
 
         lbl_area_keyword_2.grid(column=0, row=area_keyword_2_index, sticky = E)
         txt_area_keyword_2.grid(column=1, row=area_keyword_2_index, sticky = W)
+
+        lbl_area_keyword_3.grid(column=0, row=area_keyword_3_index, sticky = E)
+        txt_area_keyword_3.grid(column=1, row=area_keyword_3_index, sticky = W)
+
+        lbl_area_keyword_4.grid(column=0, row=area_keyword_4_index, sticky = E)
+        txt_area_keyword_4.grid(column=1, row=area_keyword_4_index, sticky = W)
     else:
         # hide
         lbl_area_auto_select_mode.grid_forget()
@@ -343,31 +843,32 @@ def showHideTixcraftBlocks():
         lbl_area_keyword_2.grid_forget()
         txt_area_keyword_2.grid_forget()
 
+        lbl_area_keyword_3.grid_forget()
+        txt_area_keyword_3.grid_forget()
 
-def MainMenu(root):
-    global UI_PADDING_X
-    UI_PADDING_X = 15
-    global UI_PADDING_Y
-    UI_PADDING_Y = 10
+        lbl_area_keyword_4.grid_forget()
+        txt_area_keyword_4.grid_forget()
 
-    lbl_homepage = None
-    lbl_browser = None
-    lbl_ticket_number = None
-    lbl_kktix = None
-    lbl_tixcraft = None
 
-    homepage = None
-    browser = None
-    ticket_number = "2"
+def PreferenctTab(root, config_dict, language_code, UI_PADDING_X):
+    homepage = CONST_HOMEPAGE_DEFAULT
+    browser = "chrome"
+    language = "English"
+    ticket_number = 2
+    pass_1_seat_remaining_enable = False
 
-    auto_press_next_step_button = False     # default not checked.
-    auto_fill_ticket_number = False         # default not checked.
+    auto_press_next_step_button = False
+    auto_fill_ticket_number = False
 
     kktix_area_mode = ""
-    kktix_area_keyword = ""
+    kktix_area_keyword_1 = ""
+    kktix_area_keyword_1_and = ""
+    kktix_area_keyword_2 = ""
+    kktix_area_keyword_2_and = ""
     # disable password brute force attack
+    # PS: because of the question is always variable.
     #kktix_answer_dictionary = ""
-    auto_guess_options = False              # default not checked.
+    auto_guess_options = False
 
     date_auto_select_enable = None
     date_auto_select_mode = ""
@@ -377,145 +878,108 @@ def MainMenu(root):
     area_auto_select_mode = ""
     area_keyword_1 = ""
     area_keyword_2 = ""
+    area_keyword_3 = ""
+    area_keyword_4 = ""
 
-    pass_1_seat_remaining_enable = False        # default not checked.
-    pass_date_is_sold_out_enable = False        # default not checked.
-    auto_reload_coming_soon_page_enable = True  # default checked.
+    pass_date_is_sold_out_enable = False
+    auto_reload_coming_soon_page_enable = True
 
     debugMode = False
 
+    # read config.
+    homepage = config_dict["homepage"]
+    browser = config_dict["browser"]
+    language = config_dict["language"]
+    debugMode = config_dict["debug"]
 
-    global config_dict
-    if not config_dict is None:
-        # read config.
-        if u'homepage' in config_dict:
-            homepage = config_dict["homepage"]
+    # default ticket number
+    # 說明：自動選擇的票數
+    ticket_number = config_dict["ticket_number"]
+    pass_1_seat_remaining_enable = config_dict["pass_1_seat_remaining"]
 
-        if u'browser' in config_dict:
-            browser = config_dict["browser"]
+    # for ["kktix"]
+    auto_press_next_step_button = config_dict["kktix"]["auto_press_next_step_button"]
+    auto_fill_ticket_number = config_dict["kktix"]["auto_fill_ticket_number"]
+    kktix_area_mode = config_dict["kktix"]["area_mode"].strip()
+    if not kktix_area_mode in CONST_SELECT_OPTIONS_ARRAY:
+        kktix_area_mode = CONST_SELECT_ORDER_DEFAULT
+    kktix_area_keyword_1 = config_dict["kktix"]["area_keyword_1"].strip()
+    kktix_area_keyword_1_and = config_dict["kktix"]["area_keyword_1_and"].strip()
+    kktix_area_keyword_2 = config_dict["kktix"]["area_keyword_2"].strip()
+    kktix_area_keyword_2_and = config_dict["kktix"]["area_keyword_2_and"].strip()
+    auto_guess_options = config_dict["kktix"]["auto_guess_options"]
 
-        if u'debug' in config_dict:
-            debugMode = config_dict["debug"]
+    # disable password brute force attack
+    # PS: feature disabled.
+    if 'answer_dictionary' in config_dict["kktix"]:
+        kktix_answer_dictionary = config_dict["kktix"]["answer_dictionary"]
+        if kktix_answer_dictionary is None:
+            kktix_answer_dictionary = ""
+        kktix_answer_dictionary = kktix_answer_dictionary.strip()
 
-        # default ticket number
-        # 說明：自動選擇的票數
-        if u'ticket_number' in config_dict:
-            ticket_number = str(config_dict["ticket_number"])
+    # for ["tixcraft"]
+    date_auto_select_enable = config_dict["tixcraft"]["date_auto_select"]["enable"]
+    date_auto_select_mode = config_dict["tixcraft"]["date_auto_select"]["mode"]
+    if not date_auto_select_mode in CONST_SELECT_OPTIONS_ARRAY:
+        date_auto_select_mode = CONST_SELECT_ORDER_DEFAULT
+    date_keyword = config_dict["tixcraft"]["date_auto_select"]["date_keyword"].strip()
+    area_auto_select_enable = config_dict["tixcraft"]["area_auto_select"]["enable"]
+    area_auto_select_mode = config_dict["tixcraft"]["area_auto_select"]["mode"]
+    if not area_auto_select_mode in CONST_SELECT_OPTIONS_ARRAY:
+        area_auto_select_mode = CONST_SELECT_ORDER_DEFAULT
+    area_keyword_1 = config_dict["tixcraft"]["area_auto_select"]["area_keyword_1"].strip()
+    area_keyword_2 = config_dict["tixcraft"]["area_auto_select"]["area_keyword_2"].strip()
+    area_keyword_3 = config_dict["tixcraft"]["area_auto_select"]["area_keyword_3"].strip()
+    area_keyword_4 = config_dict["tixcraft"]["area_auto_select"]["area_keyword_4"].strip()
+    pass_date_is_sold_out_enable = config_dict["tixcraft"]["pass_date_is_sold_out"]
+    auto_reload_coming_soon_page_enable = config_dict["tixcraft"]["auto_reload_coming_soon_page"]
 
-        facebook_account = ""
-        if 'facebook_account' in config_dict:
-            facebook_account = str(config_dict["facebook_account"])
+    # output config:
+    print("setting app version", CONST_APP_VERSION)
+    print("python version", platform.python_version())
+    print("homepage", homepage)
+    print("browser", browser)
+    print("language", language)
+    print("ticket_number", ticket_number)
+    print("pass_1_seat_remaining", pass_1_seat_remaining_enable)
 
-        # for ["kktix"]
-        if 'kktix' in config_dict:
-            auto_press_next_step_button = config_dict["kktix"]["auto_press_next_step_button"]
-            auto_fill_ticket_number = config_dict["kktix"]["auto_fill_ticket_number"]
+    # for kktix
+    print("==[kktix]==")
+    print("auto_press_next_step_button", auto_press_next_step_button)
+    print("auto_fill_ticket_number", auto_fill_ticket_number)
+    print("kktix_area_mode", kktix_area_mode)
+    print("kktix_area_keyword_1", kktix_area_keyword_1)
+    print("kktix_area_keyword_1_and", kktix_area_keyword_1_and)
+    # disable password brute force attack
+    #print("kktix_answer_dictionary", kktix_answer_dictionary)
+    print("auto_guess_options", auto_guess_options)
 
-            if 'area_mode' in config_dict["kktix"]:
-                kktix_area_mode = config_dict["kktix"]["area_mode"]
-                kktix_area_mode = kktix_area_mode.strip()
-            if not kktix_area_mode in CONST_SELECT_OPTIONS_ARRAY:
-                kktix_area_mode = CONST_SELECT_ORDER_DEFAULT
+    # for tixcraft
+    print("==[tixcraft]==")
+    print("date_auto_select_enable", date_auto_select_enable)
+    print("date_auto_select_mode", date_auto_select_mode)
+    print("date_keyword", date_keyword)
 
-            if 'area_keyword' in config_dict["kktix"]:
-                kktix_area_keyword = config_dict["kktix"]["area_keyword"]
-                if kktix_area_keyword is None:
-                    kktix_area_keyword = ""
-                kktix_area_keyword = kktix_area_keyword.strip()
+    print("area_auto_select_enable", area_auto_select_enable)
+    print("area_auto_select_mode", area_auto_select_mode)
+    print("area_keyword_1", area_keyword_1)
+    print("area_keyword_2", area_keyword_2)
+    print("area_keyword_3", area_keyword_3)
+    print("area_keyword_4", area_keyword_4)
 
-            if 'auto_guess_options' in config_dict["kktix"]:
-                auto_guess_options = config_dict["kktix"]["auto_guess_options"]
+    print("pass_date_is_sold_out", pass_date_is_sold_out_enable)
 
-            # disable password brute force attack
-            if 'answer_dictionary' in config_dict["kktix"]:
-                kktix_answer_dictionary = config_dict["kktix"]["answer_dictionary"]
-                if kktix_answer_dictionary is None:
-                    kktix_answer_dictionary = ""
-                kktix_answer_dictionary = kktix_answer_dictionary.strip()
+    print("auto_reload_coming_soon_page", auto_reload_coming_soon_page_enable)
 
-        # for ["tixcraft"]
-        if 'tixcraft' in config_dict:
-            date_auto_select_enable = False
-            date_auto_select_mode = None
+    print("debug Mode", debugMode)
 
-            if 'date_auto_select' in config_dict["tixcraft"]:
-                date_auto_select_enable = config_dict["tixcraft"]["date_auto_select"]["enable"]
-                date_auto_select_mode = config_dict["tixcraft"]["date_auto_select"]["mode"]
+    global lbl_homepage
+    global lbl_browser
+    global lbl_language
+    global lbl_ticket_number
 
-            if not date_auto_select_mode in CONST_SELECT_OPTIONS_ARRAY:
-                date_auto_select_mode = CONST_SELECT_ORDER_DEFAULT
-
-            if 'date_keyword' in config_dict["tixcraft"]["date_auto_select"]:
-                date_keyword = config_dict["tixcraft"]["date_auto_select"]["date_keyword"]
-                date_keyword = date_keyword.strip()
-
-            area_auto_select_enable = False
-            area_auto_select_mode = None
-
-            if 'area_auto_select' in config_dict["tixcraft"]:
-                area_auto_select_enable = config_dict["tixcraft"]["area_auto_select"]["enable"]
-                area_auto_select_mode = config_dict["tixcraft"]["area_auto_select"]["mode"]
-
-            if not area_auto_select_mode in CONST_SELECT_OPTIONS_ARRAY:
-                area_auto_select_mode = CONST_SELECT_ORDER_DEFAULT
-
-            if 'area_keyword_1' in config_dict["tixcraft"]["area_auto_select"]:
-                area_keyword_1 = config_dict["tixcraft"]["area_auto_select"]["area_keyword_1"]
-                area_keyword_1 = area_keyword_1.strip()
-
-            if 'area_keyword_2' in config_dict["tixcraft"]["area_auto_select"]:
-                area_keyword_2 = config_dict["tixcraft"]["area_auto_select"]["area_keyword_2"]
-                area_keyword_2 = area_keyword_2.strip()
-
-            pass_1_seat_remaining_enable = False
-            if 'pass_1_seat_remaining' in config_dict["tixcraft"]:
-                pass_1_seat_remaining_enable = config_dict["tixcraft"]["pass_1_seat_remaining"]
-
-            pass_date_is_sold_out_enable = False
-            if 'pass_date_is_sold_out' in config_dict["tixcraft"]:
-                pass_date_is_sold_out_enable = config_dict["tixcraft"]["pass_date_is_sold_out"]
-
-            auto_reload_coming_soon_page_enable = True
-            if 'auto_reload_coming_soon_page' in config_dict["tixcraft"]:
-                auto_reload_coming_soon_page_enable = config_dict["tixcraft"]["auto_reload_coming_soon_page"]
-
-        # output config:
-        print("setting app version", CONST_APP_VERSION)
-        print("python version", platform.python_version())
-        print("homepage", homepage)
-        print("browser", browser)
-        print("ticket_number", ticket_number)
-        print("facebook_account", facebook_account)
-
-        # for kktix
-        print("==[kktix]==")
-        print("auto_press_next_step_button", auto_press_next_step_button)
-        print("auto_fill_ticket_number", auto_fill_ticket_number)
-        print("kktix_area_mode", kktix_area_mode)
-        print("kktix_area_keyword", kktix_area_keyword)
-        # disable password brute force attack
-        #print("kktix_answer_dictionary", kktix_answer_dictionary)
-        print("auto_guess_options", auto_guess_options)
-
-        # for tixcraft
-        print("==[tixcraft]==")
-        print("date_auto_select_enable", date_auto_select_enable)
-        print("date_auto_select_mode", date_auto_select_mode)
-        print("date_keyword", date_keyword)
-        
-        print("area_auto_select_enable", area_auto_select_enable)
-        print("area_auto_select_mode", area_auto_select_mode)
-        print("area_keyword_1", area_keyword_1)
-        print("area_keyword_2", area_keyword_2)
-
-        print("pass_1_seat_remaining", pass_1_seat_remaining_enable)
-        print("pass_date_is_sold_out", pass_date_is_sold_out_enable)
-
-        print("auto_reload_coming_soon_page", auto_reload_coming_soon_page_enable)
-
-        print("debug Mode", debugMode)
-    else:
-        print('config is none')
+    global lbl_kktix
+    global lbl_tixcraft
 
     row_count = 0
 
@@ -523,12 +987,8 @@ def MainMenu(root):
     group_row_count = 0
 
     # first row need padding Y
-    lbl_homepage = Label(frame_group_header, text="Homepage", pady = UI_PADDING_Y)
+    lbl_homepage = Label(frame_group_header, text=translate[language_code]['homepage'])
     lbl_homepage.grid(column=0, row=group_row_count, sticky = E)
-
-    #global txt_homepage
-    #txt_homepage = Entry(root, width=20, textvariable = StringVar(root, value=homepage))
-    #txt_homepage.grid(column=1, row=row_count)
 
     global combo_homepage
     combo_homepage = ttk.Combobox(frame_group_header, state="readonly")
@@ -539,7 +999,7 @@ def MainMenu(root):
 
     group_row_count+=1
 
-    lbl_browser = Label(frame_group_header, text="Browser")
+    lbl_browser = Label(frame_group_header, text=translate[language_code]['browser'])
     lbl_browser.grid(column=0, row=group_row_count, sticky = E)
 
     #global txt_browser
@@ -555,11 +1015,29 @@ def MainMenu(root):
 
     group_row_count+=1
 
-    lbl_ticket_number = Label(frame_group_header, text="Ticket Number")
+    lbl_language = Label(frame_group_header, text=translate[language_code]['language'])
+    lbl_language.grid(column=0, row=group_row_count, sticky = E)
+
+    #global txt_language
+    #txt_language = Entry(root, width=20, textvariable = StringVar(root, value=language))
+    #txt_language.grid(column=1, row=group_row_count)
+
+    global combo_language
+    combo_language = ttk.Combobox(frame_group_header, state="readonly")
+    combo_language['values']= ("English","繁體中文","簡体中文","日本語")
+    #combo_language.current(0)
+    combo_language.set(language)
+    combo_language.bind("<<ComboboxSelected>>", callbackLanguageOnChange)
+    combo_language.grid(column=1, row=group_row_count, sticky = W)
+
+    group_row_count+=1
+
+    lbl_ticket_number = Label(frame_group_header, text=translate[language_code]['ticket_number'])
     lbl_ticket_number.grid(column=0, row=group_row_count, sticky = E)
 
     global combo_ticket_number
     # for text format.
+    # PS: some user keyin wrong type. @_@;
     '''
     global combo_ticket_number_value
     combo_ticket_number_value = StringVar(frame_group_header, value=ticket_number)
@@ -567,64 +1045,71 @@ def MainMenu(root):
     combo_ticket_number.grid(column=1, row=group_row_count, sticky = W)
     '''
     combo_ticket_number = ttk.Combobox(frame_group_header, state="readonly")
-    combo_ticket_number['values']= ("1","2","3","4","5","6","7","8","9","10")
+    combo_ticket_number['values']= ("1","2","3","4","5","6","7","8","9","10","11","12")
     #combo_ticket_number.current(0)
-    combo_ticket_number.set(ticket_number)
+    combo_ticket_number.set(str(ticket_number))
+    combo_ticket_number.bind("<<ComboboxSelected>>", callbackTicketNumberOnChange)
     combo_ticket_number.grid(column=1, row=group_row_count, sticky = W)
+
+    group_row_count+=1
+
+    global pass_1_seat_remaining_index
+    pass_1_seat_remaining_index = group_row_count
+
+    global lbl_pass_1_seat_remaining
+    lbl_pass_1_seat_remaining = Label(frame_group_header, text=translate[language_code]['pass_1_seat_remaining'])
+    lbl_pass_1_seat_remaining.grid(column=0, row=group_row_count, sticky = E)
+
+    global chk_state_pass_1_seat_remaining
+    chk_state_pass_1_seat_remaining = BooleanVar()
+    chk_state_pass_1_seat_remaining.set(pass_1_seat_remaining_enable)
+
+    global chk_pass_1_seat_remaining
+    chk_pass_1_seat_remaining = Checkbutton(frame_group_header, text=translate[language_code]['enable'], variable=chk_state_pass_1_seat_remaining)
+    chk_pass_1_seat_remaining.grid(column=1, row=group_row_count, sticky = W)
 
     frame_group_header.grid(column=0, row=row_count, sticky = W, padx=UI_PADDING_X)
 
-    '''
     row_count+=1
 
-    lbl_facebook_account = Label(root, text="Facebook Account")
-    lbl_facebook_account.grid(column=0, row=row_count, sticky = E)
-
-    global txt_facebook_account
-    global txt_facebook_account_value
-    txt_facebook_account_value = StringVar(root, value=facebook_account)
-    txt_facebook_account = Entry(root, width=20, textvariable = txt_facebook_account_value)
-    txt_facebook_account.grid(column=1, row=row_count, sticky = W)
-    '''
-
-    row_count+=1
-
+    # for sub group KKTix.
     global frame_group_kktix
     frame_group_kktix = Frame(root)
     group_row_count = 0
 
-    #lbl_kktix = Label(frame_group_kktix, text="[ KKTIX / URBTIX / Cityline]")
-    lbl_kktix = Label(frame_group_kktix, text="")
-    lbl_kktix.grid(column=0, row=group_row_count)
-
+    # start sub group...
     group_row_count+=1
 
-    lbl_auto_press_next_step_button = Label(frame_group_kktix, text="Auto Press Next Step Button")
+    global lbl_auto_press_next_step_button
+    lbl_auto_press_next_step_button = Label(frame_group_kktix, text=translate[language_code]['auto_press_next_step_button'])
     lbl_auto_press_next_step_button.grid(column=0, row=group_row_count, sticky = E)
 
     global chk_state_auto_press_next_step_button
     chk_state_auto_press_next_step_button = BooleanVar()
     chk_state_auto_press_next_step_button.set(auto_press_next_step_button)
 
-    chk_auto_press_next_step_button = Checkbutton(frame_group_kktix, text='Enable', variable=chk_state_auto_press_next_step_button)
+    global chk_auto_press_next_step_button
+    chk_auto_press_next_step_button = Checkbutton(frame_group_kktix, text=translate[language_code]['enable'], variable=chk_state_auto_press_next_step_button)
     chk_auto_press_next_step_button.grid(column=1, row=group_row_count, sticky = W)
 
     group_row_count+=1
 
-    lbl_auto_fill_ticket_number = Label(frame_group_kktix, text="Auto Fill Ticket Number")
+    global lbl_auto_fill_ticket_number
+    lbl_auto_fill_ticket_number = Label(frame_group_kktix, text=translate[language_code]['auto_fill_ticket_number'])
     lbl_auto_fill_ticket_number.grid(column=0, row=group_row_count, sticky = E)
 
     global chk_state_auto_fill_ticket_number
     chk_state_auto_fill_ticket_number = BooleanVar()
     chk_state_auto_fill_ticket_number.set(auto_fill_ticket_number)
 
-    chk_auto_fill_ticket_number = Checkbutton(frame_group_kktix, text='Enable', variable=chk_state_auto_fill_ticket_number)
+    global chk_auto_fill_ticket_number
+    chk_auto_fill_ticket_number = Checkbutton(frame_group_kktix, text=translate[language_code]['enable'], variable=chk_state_auto_fill_ticket_number)
     chk_auto_fill_ticket_number.grid(column=1, row=group_row_count, sticky = W)
 
     group_row_count+=1
 
     global lbl_kktix_area_mode
-    lbl_kktix_area_mode = Label(frame_group_kktix, text="Area select order")
+    lbl_kktix_area_mode = Label(frame_group_kktix, text=translate[language_code]['area_select_order'])
     lbl_kktix_area_mode.grid(column=0, row=group_row_count, sticky = E)
 
     global combo_kktix_area_mode
@@ -637,14 +1122,63 @@ def MainMenu(root):
 
     group_row_count+=1
 
-    lbl_kktix_area_keyword = Label(frame_group_kktix, text="Area Keyword")
-    lbl_kktix_area_keyword.grid(column=0, row=group_row_count, sticky = E)
+    global lbl_kktix_area_keyword_1
+    lbl_kktix_area_keyword_1 = Label(frame_group_kktix, text=translate[language_code]['area_keyword_1'])
+    lbl_kktix_area_keyword_1.grid(column=0, row=group_row_count, sticky = E)
 
-    global txt_kktix_area_keyword
-    global txt_kktix_area_keyword_value
-    txt_kktix_area_keyword_value = StringVar(frame_group_kktix, value=kktix_area_keyword)
-    txt_kktix_area_keyword = Entry(frame_group_kktix, width=20, textvariable = txt_kktix_area_keyword_value)
-    txt_kktix_area_keyword.grid(column=1, row=group_row_count, sticky = W)
+    global txt_kktix_area_keyword_1
+    txt_kktix_area_keyword_1_value = StringVar(frame_group_kktix, value=kktix_area_keyword_1)
+    txt_kktix_area_keyword_1 = Entry(frame_group_kktix, width=20, textvariable = txt_kktix_area_keyword_1_value)
+    txt_kktix_area_keyword_1.grid(column=1, row=group_row_count, sticky = W)
+
+    group_row_count+=1
+
+    lbl_kktix_area_keyword_1_and_label = Label(frame_group_kktix, text="")
+    lbl_kktix_area_keyword_1_and_label.grid(column=0, row=group_row_count, sticky = E)
+
+    global lbl_kktix_area_keyword_1_and_text
+    lbl_kktix_area_keyword_1_and_text = Label(frame_group_kktix, text=translate[language_code]['and'])
+    lbl_kktix_area_keyword_1_and_text.grid(column=1, row=group_row_count, sticky = W)
+
+    group_row_count+=1
+
+    lbl_kktix_area_keyword_1_tmp = Label(frame_group_kktix, text="")
+    lbl_kktix_area_keyword_1_tmp.grid(column=0, row=group_row_count, sticky = E)
+
+    global txt_kktix_area_keyword_1_and
+    txt_kktix_area_keyword_1_and_value = StringVar(frame_group_kktix, value=kktix_area_keyword_1_and)
+    txt_kktix_area_keyword_1_and = Entry(frame_group_kktix, width=20, textvariable = txt_kktix_area_keyword_1_and_value)
+    txt_kktix_area_keyword_1_and.grid(column=1, row=group_row_count, sticky = W)
+
+    group_row_count+=1
+
+    global lbl_kktix_area_keyword_2
+    lbl_kktix_area_keyword_2 = Label(frame_group_kktix, text=translate[language_code]['area_keyword_2'])
+    lbl_kktix_area_keyword_2.grid(column=0, row=group_row_count, sticky = E)
+
+    global txt_kktix_area_keyword_2
+    txt_kktix_area_keyword_2_value = StringVar(frame_group_kktix, value=kktix_area_keyword_2)
+    txt_kktix_area_keyword_2 = Entry(frame_group_kktix, width=20, textvariable = txt_kktix_area_keyword_2_value)
+    txt_kktix_area_keyword_2.grid(column=1, row=group_row_count, sticky = W)
+
+    group_row_count+=1
+
+    lbl_kktix_area_keyword_2_and_label = Label(frame_group_kktix, text="")
+    lbl_kktix_area_keyword_2_and_label.grid(column=0, row=group_row_count, sticky = E)
+
+    global lbl_kktix_area_keyword_2_and_text
+    lbl_kktix_area_keyword_2_and_text = Label(frame_group_kktix, text=translate[language_code]['and'])
+    lbl_kktix_area_keyword_2_and_text.grid(column=1, row=group_row_count, sticky = W)
+
+    group_row_count+=1
+
+    lbl_kktix_area_keyword_2_tmp = Label(frame_group_kktix, text="")
+    lbl_kktix_area_keyword_2_tmp.grid(column=0, row=group_row_count, sticky = E)
+
+    global txt_kktix_area_keyword_2_and
+    txt_kktix_area_keyword_2_and_value = StringVar(frame_group_kktix, value=kktix_area_keyword_2_and)
+    txt_kktix_area_keyword_2_and = Entry(frame_group_kktix, width=20, textvariable = txt_kktix_area_keyword_2_and_value)
+    txt_kktix_area_keyword_2_and.grid(column=1, row=group_row_count, sticky = W)
 
     #group_row_count+=1
 
@@ -656,21 +1190,22 @@ def MainMenu(root):
     global txt_kktix_answer_dictionary
     global txt_kktix_answer_dictionary_index
     txt_kktix_answer_dictionary_index = group_row_count
-    global txt_kktix_answer_dictionary_value
     #txt_kktix_answer_dictionary_value = StringVar(frame_group_kktix, value=kktix_answer_dictionary)
     #txt_kktix_answer_dictionary = Entry(frame_group_kktix, width=20, textvariable = txt_kktix_answer_dictionary_value)
     #txt_kktix_answer_dictionary.grid(column=1, row=group_row_count, sticky = W)
 
     group_row_count+=1
 
-    lbl_auto_guess_options = Label(frame_group_kktix, text="Guess Options in Question")
+    global lbl_auto_guess_options
+    lbl_auto_guess_options = Label(frame_group_kktix, text=translate[language_code]['auto_guess_options'])
     lbl_auto_guess_options.grid(column=0, row=group_row_count, sticky = E)
 
     global chk_state_auto_guess_options
     chk_state_auto_guess_options = BooleanVar()
     chk_state_auto_guess_options.set(auto_guess_options)
 
-    chk_auto_guess_options = Checkbutton(frame_group_kktix, text='Enable', variable=chk_state_auto_guess_options)
+    global chk_auto_guess_options
+    chk_auto_guess_options = Checkbutton(frame_group_kktix, text=translate[language_code]['enable'], variable=chk_state_auto_guess_options)
     chk_auto_guess_options.grid(column=1, row=group_row_count, sticky = W)
 
     group_row_count+=1
@@ -684,24 +1219,24 @@ def MainMenu(root):
 
     row_count+=1
 
+    # for sub group tixcraft.
     global frame_group_tixcraft
     frame_group_tixcraft = Frame(root)
     group_row_count = 0
 
-    #lbl_tixcraft = Label(frame_group_tixcraft, text="[ tixCraft / FamiTicket]")
-    lbl_tixcraft = Label(frame_group_tixcraft, text="")
-    lbl_tixcraft.grid(column=0, row=group_row_count)
-
+    # start sub group.
     group_row_count+=1
 
-    lbl_date_auto_select = Label(frame_group_tixcraft, text="Date Auto Select")
+    global lbl_date_auto_select
+    lbl_date_auto_select = Label(frame_group_tixcraft, text=translate[language_code]['date_auto_select'])
     lbl_date_auto_select.grid(column=0, row=group_row_count, sticky = E)
 
     global chk_state_date_auto_select
     chk_state_date_auto_select = BooleanVar()
     chk_state_date_auto_select.set(date_auto_select_enable)
 
-    chk_date_auto_select = Checkbutton(frame_group_tixcraft, text='Enable', variable=chk_state_date_auto_select, command=callbackDateAutoOnChange)
+    global chk_date_auto_select
+    chk_date_auto_select = Checkbutton(frame_group_tixcraft, text=translate[language_code]['enable'], variable=chk_state_date_auto_select, command=callbackDateAutoOnChange)
     chk_date_auto_select.grid(column=1, row=group_row_count, sticky = W)
 
     group_row_count+=1
@@ -710,7 +1245,7 @@ def MainMenu(root):
     date_auto_select_mode_index = group_row_count
 
     global lbl_date_auto_select_mode
-    lbl_date_auto_select_mode = Label(frame_group_tixcraft, text="Date select order")
+    lbl_date_auto_select_mode = Label(frame_group_tixcraft, text=translate[language_code]['date_select_order'])
     lbl_date_auto_select_mode.grid(column=0, row=date_auto_select_mode_index, sticky = E)
 
     global combo_date_auto_select_mode
@@ -725,18 +1260,18 @@ def MainMenu(root):
     date_keyword_index = group_row_count
 
     global lbl_date_keyword
-    lbl_date_keyword = Label(frame_group_tixcraft, text="Date Keyword")
+    lbl_date_keyword = Label(frame_group_tixcraft, text=translate[language_code]['date_keyword'])
     lbl_date_keyword.grid(column=0, row=date_keyword_index, sticky = E)
 
     global txt_date_keyword
-    global txt_date_keyword_value
     txt_date_keyword_value = StringVar(frame_group_tixcraft, value=date_keyword)
     txt_date_keyword = Entry(frame_group_tixcraft, width=20, textvariable = txt_date_keyword_value)
     txt_date_keyword.grid(column=1, row=date_keyword_index, sticky = W)
 
     group_row_count+=1
 
-    lbl_area_auto_select = Label(frame_group_tixcraft, text="Area Auto Select")
+    global lbl_area_auto_select
+    lbl_area_auto_select = Label(frame_group_tixcraft, text=translate[language_code]['area_auto_select'])
     lbl_area_auto_select.grid(column=0, row=group_row_count, sticky = E)
 
     global chk_state_area_auto_select
@@ -744,7 +1279,7 @@ def MainMenu(root):
     chk_state_area_auto_select.set(area_auto_select_enable)
 
     global chk_area_auto_select
-    chk_area_auto_select = Checkbutton(frame_group_tixcraft, text='Enable', variable=chk_state_area_auto_select, command=callbackDateAutoOnChange)
+    chk_area_auto_select = Checkbutton(frame_group_tixcraft, text=translate[language_code]['enable'], variable=chk_state_area_auto_select, command=callbackDateAutoOnChange)
     chk_area_auto_select.grid(column=1, row=group_row_count, sticky = W)
 
     group_row_count+=1
@@ -753,7 +1288,7 @@ def MainMenu(root):
     area_auto_select_index = group_row_count
 
     global lbl_area_auto_select_mode
-    lbl_area_auto_select_mode = Label(frame_group_tixcraft, text="Area select order")
+    lbl_area_auto_select_mode = Label(frame_group_tixcraft, text=translate[language_code]['area_auto_select'])
     lbl_area_auto_select_mode.grid(column=0, row=area_auto_select_index, sticky = E)
 
     global combo_area_auto_select_mode
@@ -768,11 +1303,10 @@ def MainMenu(root):
     area_keyword_1_index = group_row_count
 
     global lbl_area_keyword_1
-    lbl_area_keyword_1 = Label(frame_group_tixcraft, text="Area Keyword #1")
+    lbl_area_keyword_1 = Label(frame_group_tixcraft, text=translate[language_code]['area_keyword_1'])
     lbl_area_keyword_1.grid(column=0, row=area_keyword_1_index, sticky = E)
 
     global txt_area_keyword_1
-    global txt_area_keyword_1_value
     txt_area_keyword_1_value = StringVar(frame_group_tixcraft, value=area_keyword_1)
     txt_area_keyword_1 = Entry(frame_group_tixcraft, width=20, textvariable = txt_area_keyword_1_value)
     txt_area_keyword_1.grid(column=1, row=area_keyword_1_index, sticky = W)
@@ -783,31 +1317,46 @@ def MainMenu(root):
     area_keyword_2_index = group_row_count
 
     global lbl_area_keyword_2
-    lbl_area_keyword_2 = Label(frame_group_tixcraft, text="Area Keyword #2")
+    lbl_area_keyword_2 = Label(frame_group_tixcraft, text=translate[language_code]['area_keyword_2'])
     lbl_area_keyword_2.grid(column=0, row=area_keyword_2_index, sticky = E)
 
     global txt_area_keyword_2
-    global txt_area_keyword_2_value
     txt_area_keyword_2_value = StringVar(frame_group_tixcraft, value=area_keyword_2)
     txt_area_keyword_2 = Entry(frame_group_tixcraft, width=20, textvariable = txt_area_keyword_2_value)
     txt_area_keyword_2.grid(column=1, row=area_keyword_2_index, sticky = W)
 
     group_row_count+=1
 
-    lbl_pass_1_seat_remaining = Label(frame_group_tixcraft, text="Pass 1 seat remaining")
-    lbl_pass_1_seat_remaining.grid(column=0, row=group_row_count, sticky = E)
+    global area_keyword_3_index
+    area_keyword_3_index = group_row_count
 
-    global chk_state_pass_1_seat_remaining
-    chk_state_pass_1_seat_remaining = BooleanVar()
-    chk_state_pass_1_seat_remaining.set(pass_1_seat_remaining_enable)
+    global lbl_area_keyword_3
+    lbl_area_keyword_3 = Label(frame_group_tixcraft, text=translate[language_code]['area_keyword_3'])
+    lbl_area_keyword_3.grid(column=0, row=area_keyword_3_index, sticky = E)
 
-    global chk_pass_1_seat_remaining
-    chk_pass_1_seat_remaining = Checkbutton(frame_group_tixcraft, text='Enable', variable=chk_state_pass_1_seat_remaining)
-    chk_pass_1_seat_remaining.grid(column=1, row=group_row_count, sticky = W)
+    global txt_area_keyword_3
+    txt_area_keyword_3_value = StringVar(frame_group_tixcraft, value=area_keyword_3)
+    txt_area_keyword_3 = Entry(frame_group_tixcraft, width=20, textvariable = txt_area_keyword_3_value)
+    txt_area_keyword_3.grid(column=1, row=area_keyword_3_index, sticky = W)
 
     group_row_count+=1
 
-    lbl_pass_date_is_sold_out = Label(frame_group_tixcraft, text="Pass date is sold out")
+    global area_keyword_4_index
+    area_keyword_4_index = group_row_count
+
+    global lbl_area_keyword_4
+    lbl_area_keyword_4 = Label(frame_group_tixcraft, text=translate[language_code]['area_keyword_4'])
+    lbl_area_keyword_4.grid(column=0, row=area_keyword_4_index, sticky = E)
+
+    global txt_area_keyword_4
+    txt_area_keyword_4_value = StringVar(frame_group_tixcraft, value=area_keyword_4)
+    txt_area_keyword_4 = Entry(frame_group_tixcraft, width=20, textvariable = txt_area_keyword_4_value)
+    txt_area_keyword_4.grid(column=1, row=area_keyword_4_index, sticky = W)
+
+    group_row_count+=1
+
+    global lbl_pass_date_is_sold_out
+    lbl_pass_date_is_sold_out = Label(frame_group_tixcraft, text=translate[language_code]['pass_date_is_sold_out'])
     lbl_pass_date_is_sold_out.grid(column=0, row=group_row_count, sticky = E)
 
     global chk_state_pass_date_is_sold_out
@@ -815,12 +1364,13 @@ def MainMenu(root):
     chk_state_pass_date_is_sold_out.set(pass_date_is_sold_out_enable)
 
     global chk_pass_date_is_sold_out
-    chk_pass_date_is_sold_out = Checkbutton(frame_group_tixcraft, text='Enable', variable=chk_state_pass_date_is_sold_out)
+    chk_pass_date_is_sold_out = Checkbutton(frame_group_tixcraft, text=translate[language_code]['enable'], variable=chk_state_pass_date_is_sold_out)
     chk_pass_date_is_sold_out.grid(column=1, row=group_row_count, sticky = W)
 
     group_row_count+=1
 
-    lbl_auto_reload_coming_soon_page = Label(frame_group_tixcraft, text="Reload coming soon page")
+    global lbl_auto_reload_coming_soon_page
+    lbl_auto_reload_coming_soon_page = Label(frame_group_tixcraft, text=translate[language_code]['auto_reload_coming_soon_page'])
     lbl_auto_reload_coming_soon_page.grid(column=0, row=group_row_count, sticky = E)
 
     global chk_state_auto_reload_coming_soon_page
@@ -828,11 +1378,10 @@ def MainMenu(root):
     chk_state_auto_reload_coming_soon_page.set(auto_reload_coming_soon_page_enable)
 
     global chk_auto_reload_coming_soon_page
-    chk_auto_reload_coming_soon_page = Checkbutton(frame_group_tixcraft, text='Enable', variable=chk_state_auto_reload_coming_soon_page)
+    chk_auto_reload_coming_soon_page = Checkbutton(frame_group_tixcraft, text=translate[language_code]['enable'], variable=chk_state_auto_reload_coming_soon_page)
     chk_auto_reload_coming_soon_page.grid(column=1, row=group_row_count, sticky = W)
 
     group_row_count+=1
-
 
     global frame_group_tixcraft_index
     frame_group_tixcraft_index = row_count
@@ -843,31 +1392,221 @@ def MainMenu(root):
     lbl_hr = Label(root, text="")
     lbl_hr.grid(column=0, row=row_count)
 
-    row_count+=1
-
-    frame_action = Frame(root)
-
-    btn_run = ttk.Button(frame_action, text="Run", command=btn_run_clicked)
-    btn_run.grid(column=0, row=0)
-
-    btn_save = ttk.Button(frame_action, text="Save", command=btn_save_clicked)
-    btn_save.grid(column=1, row=0)
-
-    btn_exit = ttk.Button(frame_action, text="Exit", command=btn_exit_clicked)
-    btn_exit.grid(column=2, row=0)
-
-    frame_action.grid(column=0, row=row_count, sticky = W, padx=UI_PADDING_X)
-
     showHideBlocks(all_layout_visible=True)
 
+def AdvancedTab(root, config_dict, language_code, UI_PADDING_X):
+    row_count = 0
+
+    frame_group_header = Frame(root)
+    group_row_count = 0
+
+    facebook_account = ""
+    play_captcha_sound = False
+    captcha_sound_filename = CONST_CAPTCHA_SOUND_FILENAME_DEFAULT
+    adblock_plus_enable = False
+
+    if 'advanced' in config_dict:
+        if 'facebook_account' in config_dict["advanced"]:
+            facebook_account = config_dict["advanced"]["facebook_account"].strip()
+        if 'play_captcha_sound' in config_dict["advanced"]:
+            if 'enable' in config_dict["advanced"]["play_captcha_sound"]:
+                play_captcha_sound = config_dict["advanced"]["play_captcha_sound"]["enable"]
+            if 'filename' in config_dict["advanced"]["play_captcha_sound"]:
+                captcha_sound_filename = config_dict["advanced"]["play_captcha_sound"]["filename"].strip()
+        if 'adblock_plus_enable' in config_dict["advanced"]:
+            adblock_plus_enable = config_dict["advanced"]["adblock_plus_enable"]
+
+    # for kktix
+    print("==[advanced]==")
+    print("facebook_account", facebook_account)
+    print("play_captcha_sound", play_captcha_sound)
+    print("captcha_sound_filename", captcha_sound_filename)
+    print("adblock_plus_enable", adblock_plus_enable)
+
+    # assign default value.
+    if captcha_sound_filename is None:
+        captcha_sound_filename = ""
+    if len(captcha_sound_filename)==0:
+        captcha_sound_filename = captcha_sound_filename_default
+
+
+    global lbl_facebook_account
+    lbl_facebook_account = Label(frame_group_header, text=translate[language_code]['facebook_account'])
+    lbl_facebook_account.grid(column=0, row=group_row_count, sticky = E)
+
+    global txt_facebook_account
+    txt_facebook_account_value = StringVar(frame_group_header, value=facebook_account)
+    txt_facebook_account = Entry(frame_group_header, width=20, textvariable = txt_facebook_account_value)
+    txt_facebook_account.grid(column=1, row=group_row_count, sticky = W)
+
+    group_row_count +=1
+
+    global lbl_play_captcha_sound
+    lbl_play_captcha_sound = Label(frame_group_header, text=translate[language_code]['play_captcha_sound'])
+    lbl_play_captcha_sound.grid(column=0, row=group_row_count, sticky = E)
+
+    global chk_state_play_captcha_sound
+    chk_state_play_captcha_sound = BooleanVar()
+    chk_state_play_captcha_sound.set(play_captcha_sound)
+
+    global chk_play_captcha_sound
+    chk_play_captcha_sound = Checkbutton(frame_group_header, text=translate[language_code]['enable'], variable=chk_state_play_captcha_sound)
+    chk_play_captcha_sound.grid(column=1, row=group_row_count, sticky = W)
+
+    group_row_count +=1
+
+    global lbl_captcha_sound_filename
+    lbl_captcha_sound_filename = Label(frame_group_header, text=translate[language_code]['captcha_sound_filename'])
+    lbl_captcha_sound_filename.grid(column=0, row=group_row_count, sticky = E)
+
+    #print("captcha_sound_filename:", captcha_sound_filename)
+    global txt_captcha_sound_filename
+    txt_captcha_sound_filename_value = StringVar(frame_group_header, value=captcha_sound_filename)
+    txt_captcha_sound_filename = Entry(frame_group_header, width=20, textvariable = txt_captcha_sound_filename_value)
+    txt_captcha_sound_filename.grid(column=1, row=group_row_count, sticky = W)
+
+    icon_play_filename = "icon_play_1.gif"
+    icon_play_img = PhotoImage(file=icon_play_filename)
+
+    lbl_icon_play = Label(frame_group_header, image=icon_play_img, cursor="hand2")
+    lbl_icon_play.image = icon_play_img
+    lbl_icon_play.grid(column=3, row=group_row_count)
+    lbl_icon_play.bind("<Button-1>", lambda e: btn_preview_sound_clicked())
+
+    group_row_count +=1
+
+    global lbl_adblock_plus
+    lbl_adblock_plus = Label(frame_group_header, text=translate[language_code]['adblock_plus_enable'])
+    lbl_adblock_plus.grid(column=0, row=group_row_count, sticky = E)
+
+    global chk_state_adblock_plus
+    chk_state_adblock_plus = BooleanVar()
+    chk_state_adblock_plus.set(adblock_plus_enable)
+
+    global chk_adblock_plus
+    chk_adblock_plus = Checkbutton(frame_group_header, text=translate[language_code]['enable'], variable=chk_state_adblock_plus)
+    chk_adblock_plus.grid(column=1, row=group_row_count, sticky = W)
+
+    group_row_count +=1
+
+    lbl_adblock_plus_ps = Label(frame_group_header, text='')
+    lbl_adblock_plus_ps.grid(column=0, row=group_row_count, sticky = E)
+
+    global lbl_adblock_plus_memo
+    lbl_adblock_plus_memo = Label(frame_group_header, text=translate[language_code]['adblock_plus_memo'])
+    lbl_adblock_plus_memo.grid(column=1, row=group_row_count, sticky = W)
+
+    group_row_count +=1
+
+    global lbl_adblock_plus_settings
+    lbl_adblock_plus_settings = Label(frame_group_header, text=translate[language_code]['adblock_plus_settings'])
+    lbl_adblock_plus_settings.grid(column=0, row=group_row_count, sticky = E+N)
+
+    txt_adblock_plus_settings = Text(frame_group_header, width=20, height=5)
+    txt_adblock_plus_settings.grid(column=1, row=group_row_count, sticky = W)
+    txt_adblock_plus_settings.insert("1.0", CONST_ADBLOCK_PLUS_ADVANCED_FILTER_DEFAULT)
+
+    icon_copy_filename = "icon_copy_2.gif"
+    icon_copy_img = PhotoImage(file=icon_copy_filename)
+
+    lbl_icon_copy = Label(frame_group_header, image=icon_copy_img, cursor="hand2")
+    lbl_icon_copy.image = icon_copy_img
+    lbl_icon_copy.grid(column=3, row=group_row_count, sticky = W+N)
+    lbl_icon_copy.bind("<Button-1>", lambda e: btn_copy_clicked())
+
+    frame_group_header.grid(column=0, row=row_count, padx=UI_PADDING_X)
+
+
+def AboutTab(root, language_code):
+    row_count = 0
+
+    frame_group_header = Frame(root)
+    group_row_count = 0
+
+    logo_filename = "maxbot_logo2_single.ppm"
+    logo_img = PhotoImage(file=logo_filename)
+
+    lbl_logo = Label(frame_group_header, image=logo_img)
+    lbl_logo.image = logo_img
+    lbl_logo.grid(column=0, row=group_row_count, columnspan=2)
+
+    group_row_count +=1
+
+    global lbl_slogan
+    global lbl_help
+    global lbl_donate
+    global lbl_release
+
+    lbl_slogan = Label(frame_group_header, text=translate[language_code]['maxbot_slogan'], wraplength=400, justify="center")
+    lbl_slogan.grid(column=0, row=group_row_count, columnspan=2)
+
+    group_row_count +=1
+
+    lbl_help = Label(frame_group_header, text=translate[language_code]['help'])
+    lbl_help.grid(column=0, row=group_row_count, sticky = E)
+
+    lbl_help_url = Label(frame_group_header, text=URL_HELP, fg="blue", cursor="hand2")
+    lbl_help_url.grid(column=1, row=group_row_count, sticky = W)
+    lbl_help_url.bind("<Button-1>", lambda e: open_url(URL_HELP))
+
+    group_row_count +=1
+
+    lbl_donate = Label(frame_group_header, text=translate[language_code]['donate'])
+    lbl_donate.grid(column=0, row=group_row_count, sticky = E)
+
+    lbl_donate_url = Label(frame_group_header, text=URL_DONATE, fg="blue", cursor="hand2")
+    lbl_donate_url.grid(column=1, row=group_row_count, sticky = W)
+    lbl_donate_url.bind("<Button-1>", lambda e: open_url(URL_DONATE))
+
+    group_row_count +=1
+
+    lbl_release = Label(frame_group_header, text=translate[language_code]['release'])
+    lbl_release.grid(column=0, row=group_row_count, sticky = E)
+
+    lbl_release_url = Label(frame_group_header, text=URL_RELEASE, fg="blue", cursor="hand2")
+    lbl_release_url.grid(column=1, row=group_row_count, sticky = W)
+    lbl_release_url.bind("<Button-1>", lambda e: open_url(URL_RELEASE))
+
+    group_row_count +=1
+
+    lbl_fb_fans = Label(frame_group_header, text=u'Facebook')
+    lbl_fb_fans.grid(column=0, row=group_row_count, sticky = E)
+
+    lbl_fb_fans_url = Label(frame_group_header, text=URL_FB, fg="blue", cursor="hand2")
+    lbl_fb_fans_url.grid(column=1, row=group_row_count, sticky = W)
+    lbl_fb_fans_url.bind("<Button-1>", lambda e: open_url(URL_FB))
+
+    frame_group_header.grid(column=0, row=row_count)
+
+def get_action_bar(root,language_code):
+    frame_action = Frame(root)
+
+    global btn_run
+    global btn_save
+    global btn_exit
+
+    btn_run = ttk.Button(frame_action, text=translate[language_code]['run'], command=btn_run_clicked)
+    btn_run.grid(column=0, row=0)
+
+    btn_save = ttk.Button(frame_action, text=translate[language_code]['save'], command=btn_save_clicked)
+    btn_save.grid(column=1, row=0)
+
+    btn_exit = ttk.Button(frame_action, text=translate[language_code]['exit'], command=btn_exit_clicked)
+    btn_exit.grid(column=3, row=0)
+
+    return frame_action
 
 def main():
-    load_json()
+    global translate
+    translate = load_translate()
+
+    global config_filepath
+    global config_dict
+    config_filepath, config_dict = load_json()
 
     global root
     root = Tk()
     root.title(CONST_APP_VERSION)
-
 
     #style = ttk.Style(root)
     #style.theme_use('aqua')
@@ -878,19 +1617,48 @@ def main():
     #style.configure('TLabel', background='lightgray', foreground='black')
     #style.configure('TFrame', background='lightgray')
 
-    GUI = MainMenu(root)
+    language_code="en_us"
+    if not config_dict is None:
+        if u'language' in config_dict:
+            language_code = get_language_code_by_name(config_dict["language"])
 
-    GUI_SIZE_WIDTH = 420
-    GUI_SIZE_HEIGHT = 455
+    row_count = 0
+
+    global tabControl
+    tabControl = ttk.Notebook(root)
+    tab1 = Frame(tabControl)
+    tabControl.add(tab1, text=translate[language_code]['preference'])
+    tab2 = Frame(tabControl)
+    tabControl.add(tab2, text=translate[language_code]['advanced'])
+    tab3 = Frame(tabControl)
+    tabControl.add(tab3, text=translate[language_code]['about'])
+    tabControl.grid(column=0, row=row_count)
+    tabControl.select(tab1)
+
+    row_count+=1
+
+    frame_action = get_action_bar(root,language_code)
+    frame_action.grid(column=0, row=row_count)
+
+    global UI_PADDING_X
+    UI_PADDING_X = 15
+
+    GUI_SIZE_WIDTH = 460
+    GUI_SIZE_HEIGHT = 550
+
+    PreferenctTab(tab1, config_dict, language_code, UI_PADDING_X)
+    AdvancedTab(tab2, config_dict, language_code, UI_PADDING_X)
+    AboutTab(tab3, language_code)
+
     GUI_SIZE_MACOS = str(GUI_SIZE_WIDTH) + 'x' + str(GUI_SIZE_HEIGHT)
-    GUI_SIZE_WINDOWS=str(GUI_SIZE_WIDTH-60) + 'x' + str(GUI_SIZE_HEIGHT-20)
+    GUI_SIZE_WINDOWS=str(GUI_SIZE_WIDTH-60) + 'x' + str(GUI_SIZE_HEIGHT-90)
 
     GUI_SIZE =GUI_SIZE_MACOS
-    import platform
+
     if platform.system() == 'Windows':
-        GUI_SIZE =GUI_SIZE_WINDOWS
+        GUI_SIZE = GUI_SIZE_WINDOWS
+
     root.geometry(GUI_SIZE)
-    
 
     # for icon.
     icon_filepath = 'tmp.ico'
@@ -919,6 +1687,5 @@ def main():
 
     root.mainloop()
 
-    
 if __name__ == "__main__":
     main()

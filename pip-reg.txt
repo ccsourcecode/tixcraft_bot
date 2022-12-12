@@ -1,5 +1,9 @@
 certifi
 chardet
+cryptography
 idna
 selenium
 selenium-stealth
+undetected-chromedriver
+playsound
+pyperclip
